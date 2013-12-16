@@ -1,0 +1,12 @@
+# python
+.pyc
+
+# build directories
+build
+dist
+
+# virtualenv files
+bin
+lib
+include
+.Python
