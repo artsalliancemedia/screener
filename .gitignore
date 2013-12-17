@@ -1,5 +1,5 @@
 # python
-.pyc
+*.pyc
 
 # build directories
 build
@@ -8,5 +8,6 @@ dist
 # virtualenv files
 bin
 lib
+man
 include
 .Python
