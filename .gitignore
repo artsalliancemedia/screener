@@ -11,3 +11,6 @@ lib
 man
 include
 .Python
+/docs/_static
+/docs/_templates
+/docs/_build

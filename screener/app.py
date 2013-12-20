@@ -16,10 +16,14 @@ class ScreenServer(object):
     def __init__(self):
         self.content = Content()
         self.playback = Playback()
-        self.handlers = HANDLERS =\
-            {0x00 : self.playback.play,  0x01 : self.playback.stop,
-             0x02 : self.playback.status, 0x03 : system_time,
-             0x04 : self.content.uuids, 0x05: self.playback.pause}
+        self.handlers = HANDLERS = {
+                0x00 : self.playback.play,
+                0x01 : self.playback.stop,
+                0x02 : self.playback.status,
+                0x03 : system_time,
+                0x04 : self.content.get_cpl_uuids,
+                0x05 : self.playback.pause
+            }
 
     def process_klv(self, msg):
         """
@@ -48,5 +52,5 @@ class ScreenerFactory(protocol.Factory):
         return Screener()
 
 if __name__ == '__main__':
-    reactor.listenTCP(1234, ScreenerFactory())
+    reactor.listenTCP(9500, ScreenerFactory())
     reactor.run()

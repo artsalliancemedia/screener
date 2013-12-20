@@ -32,17 +32,17 @@ def status(comm=comm):
     k,v = klv.decode(rst, 16)
     return bytes_to_str(v)
 
-def system_time(comm=comm):
-    msg = bytearray('\x00' * 15 + '\x03' + '\x00')
-    rst = comm(msg)
-    k,v = klv.decode(rst, 16)
-    return datetime.fromtimestamp(bytes_to_int(v))
-
 def content_uuids(comm=comm):
-    msg = bytearray('\x00' * 15 + '\x04' + '\x00')
+    msg = bytearray('\x00' * 15 + '\x20' + '\x00')
     rst = comm(msg)
     k,v = klv.decode(rst, 16)
     return json.loads(bytes_to_str(v))
+
+def system_time(comm=comm):
+    msg = bytearray('\x00' * 15 + '\x40' + '\x00')
+    rst = comm(msg)
+    k,v = klv.decode(rst, 16)
+    return datetime.fromtimestamp(bytes_to_int(v))
 
 class Comms(object):
 
