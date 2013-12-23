@@ -15,6 +15,7 @@ Test Client
 
 ```bash
 python screener/client.py
+```
 
 Unit Tests
 ----------
