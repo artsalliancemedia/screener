@@ -7,6 +7,7 @@ from util import int_to_bytes
 from system import system_time
 from playback import Playback
 from content import Content
+from schedule import Schedule
 
 # See SMPTE ST-336-2007 for details on the header format
 HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
@@ -16,6 +17,8 @@ class ScreenServer(object):
     def __init__(self):
         self.content = Content()
         self.playback = Playback()
+        self.schedule = Schedule()
+
         self.handlers = HANDLERS = {
                 0x00 : self.playback.play,
                 0x01 : self.playback.stop,

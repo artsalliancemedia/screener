@@ -61,7 +61,7 @@ class Comms(object):
     def close(self):
         self.s.close()
 
-comms = Comms('localhost', 1234)
+comms = Comms('localhost', 9500)
 comms.open()
 print 'System time: %s' % system_time(comms.send_recv).isoformat()
 print 'Content UUIDs: %s' % content_uuids(comms.send_recv)
