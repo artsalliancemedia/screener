@@ -24,3 +24,15 @@ Install nose and use:
 ```bash
 nosetests
 ```
+
+Documentation
+-------------
+
+Install Sphinx and use:
+
+```bash
+cd docs
+make html
+```
+
+You'll find the docs under `docs/_build`.
