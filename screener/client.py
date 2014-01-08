@@ -25,7 +25,11 @@ class Comm(object):
     def send_recv(self, msg):
         self.s.sendall(msg)
         return self.s.recv(1024)
-        
+
+def decode_repsonse(rsp):
+    k,v = klv.decode(rsp)
+    try:
+        return json.loads(bytes_to_str(v))
 
 def send(handler_key, obj=None, host='localhost', port=9500):
     '''
@@ -80,7 +84,11 @@ def ingest(uuid,
     '''
     Sends the ingest DCP command to screener, returns the ingest queue uuid.
     '''
-    rsp = send(0x06, {'dcp_path':uuid, 'connection_details': connection_details})
+    rsp = send(0x06,
+               {'dcp_path':uuid,
+               'connection_details': connection_details},
+               host,
+               port)
     k,v = klv.decode(rsp, 16)
     return json.loads(bytes_to_str(v))
 
