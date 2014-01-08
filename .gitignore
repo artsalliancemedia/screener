@@ -14,3 +14,6 @@ include
 /docs/_static
 /docs/_templates
 /docs/_build
+
+# dcp store
+screener/dcp_store
