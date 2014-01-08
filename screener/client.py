@@ -1,3 +1,6 @@
+'''
+A basic testing client for the Screener app
+'''
 import socket
 from datetime import datetime
 import json
@@ -24,11 +27,11 @@ class Comm(object):
         return self.s.recv(1024)
         
 
-def send(handler_key, obj=None, comm=Comm, host='localhost', port=9500):
+def send(handler_key, obj=None, host='localhost', port=9500):
     '''
     Takes json serialisable python objects and constructs a
-    SMTPE conformant KVL message and sends it to the connection object, comm on
-    the given host and port.
+    SMTPE conformant KVL message and sends it via an instance of
+    the connection class, Comm, on the given host and port.
     '''
     # See SMPTE ST-336-2007 for details on the header format
     key = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 8) + [handler_key]
@@ -37,37 +40,43 @@ def send(handler_key, obj=None, comm=Comm, host='localhost', port=9500):
         msg = klv.encode(key,value)
     else:
         msg = bytearray(key+[0x00]) # 0 length, 0 message
-    with comm(host, port) as c:
+
+    with Comm(host, port) as c:
         return c.send_recv(msg)
 
 
-def play():
+def play(host='localhost', port=9500):
     rsp = send(0x00)
     k,v = klv.decode(rsp, 16)
     return bytes_to_int(v)
 
-def stop():
+def stop(host='localhost', port=9500):
     rsp = send(0x01)
     k,v = klv.decode(rsp, 16)
     return bytes_to_int(v)
 
-def status():
+def status(host='localhost', port=9500):
     rsp = send(0x02)
     k,v = klv.decode(rsp, 16)
     return bytes_to_int(v)
 
-def content_uuids():
+def content_uuids(host='localhost', port=9500):
     rsp = send(0x20)
     k,v = klv.decode(rsp, 16)
     return json.loads(bytes_to_str(v))
 
-def system_time():
+def system_time(host='localhost', port=9500):
     rsp = send(0x40)
     k,v = klv.decode(rsp, 16)
     return datetime.fromtimestamp(bytes_to_int(v))
 
 
-def ingest(uuid, connection_details={'host':'10.58.4.8','user':'pullingest','passwd':'pullingest'}):
+def ingest(uuid,
+           connection_details={'host':'10.58.4.8',
+                               'user':'pullingest',
+                               'passwd':'pullingest'},
+           host='localhost',
+           port=9500):
     '''
     Sends the ingest DCP command to screener, returns the ingest queue uuid.
     '''
