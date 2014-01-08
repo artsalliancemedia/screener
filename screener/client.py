@@ -27,9 +27,12 @@ class Comm(object):
         return self.s.recv(1024)
 
 def decode_repsonse(rsp):
-    k,v = klv.decode(rsp)
     try:
-        return json.loads(bytes_to_str(v))
+        k,v = klv.decode(rsp, 16)
+        return json.loads(bytes_to_str(v))['response']
+    except Exception as err:
+        print 'There was an error with response {0}.\nErr:\n{1}'.format(rsp,err) 
+
 
 def send(handler_key, obj=None, host='localhost', port=9500):
     '''
@@ -50,52 +53,35 @@ def send(handler_key, obj=None, host='localhost', port=9500):
 
 
 def play(host='localhost', port=9500):
-    rsp = send(0x00)
-    k,v = klv.decode(rsp, 16)
-    return bytes_to_int(v)
+    rsp = send(0x00, host=host, port=port)
+    return decode_repsonse(rsp)
 
 def stop(host='localhost', port=9500):
-    rsp = send(0x01)
-    k,v = klv.decode(rsp, 16)
-    return bytes_to_int(v)
+    rsp = send(0x01, host=host, port=port)
+    return decode_repsonse(rsp)
 
 def status(host='localhost', port=9500):
-    rsp = send(0x02)
-    k,v = klv.decode(rsp, 16)
-    return bytes_to_int(v)
+    rsp = send(0x02, host=host, port=port)
+    return decode_repsonse(rsp)
 
 def content_uuids(host='localhost', port=9500):
-    rsp = send(0x20)
-    k,v = klv.decode(rsp, 16)
-    return json.loads(bytes_to_str(v))
+    rsp = send(0x20, host=host, port=port)
+    return decode_repsonse(rsp)
 
 def system_time(host='localhost', port=9500):
-    rsp = send(0x40)
-    k,v = klv.decode(rsp, 16)
-    return datetime.fromtimestamp(bytes_to_int(v))
+    rsp = send(0x40, host=host, port=port)
+    return datetime.fromtimestamp(decode_repsonse(rsp))
 
 
-def ingest(uuid,
-           connection_details={'host':'10.58.4.8',
-                               'user':'pullingest',
-                               'passwd':'pullingest'},
-           host='localhost',
-           port=9500):
-    '''
-    Sends the ingest DCP command to screener, returns the ingest queue uuid.
-    '''
-    rsp = send(0x06,
-               {'dcp_path':uuid,
-               'connection_details': connection_details},
-               host,
-               port)
-    k,v = klv.decode(rsp, 16)
-    return json.loads(bytes_to_str(v))
+def ingest(uuid, host='localhost', port=9500):
+    '''Sends the ingest DCP command to screener, returns the ingest queue uuid.'''
+    rsp = send(0x06, uuid, host=host, port=port)
+    return decode_repsonse(rsp)
 
 
 if __name__ == '__main__':
 
     uuid = '00a2c129-891d-4fec-a567-01ddc335452d'
-    print 'Ingesting: {0}.\nQueue UUID = {1}'.format(uuid, ingest(uuid)['uuid'])
+    print 'Ingesting: {0}.\nQueue UUID = {1}'.format(uuid, ingest(uuid))
 
 

@@ -17,3 +17,6 @@ include
 
 # dcp store
 screener/dcp_store
+
+# config
+screener/screener.cfg

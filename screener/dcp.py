@@ -1,5 +1,3 @@
-from Queue import Queue
-from uuid import uuid4
 from ftplib import FTP
 import os
 import time
@@ -10,38 +8,8 @@ from math import floor
 from datetime import datetime
 import logging
 
-logging.getLogger(__name__)
-print logging.info
 
 
-class IndexableQueue(Queue, object):
-    '''
-    Variant of Queue that returns queue item uuid on put() and allows reference to
-    that item by its uuid.
-    The queue backend is a list of tuples instead of a deque, index 0 is the uuid, index 1 is the item.
-    [(item0_uuid, item0), (item1_uuid, item1), (item2_uuid, item2), ...]
-    An ordered dict would be good, but not available in 2.6.
-    '''
-    def __getitem__(self, uuid):
-        with self.mutex:
-            return next(item[1] for item in self.queue if item[0]==uuid)
-
-    def _init(self, maxsize):
-        self.queue = []
-
-    def _qsize(self, len=len):
-        return len(self.queue)
-
-    def _put(self, item):
-        self.queue.append((str(uuid4()), item))
-
-    def _get(self):
-        return self.queue.pop(0)[1]
-
-    def put(self, item, block=True, timeout=None):
-        super(IndexableQueue, self).put(item, block, timeout)
-        # return the uuid
-        return next(qitem[0] for qitem in self.queue if qitem[1]==item)
 
 
 def process_ingest_queue(queue, interval=1):
@@ -65,7 +33,8 @@ def process_ingest_queue_item(item):
     dcp_path = item['dcp_path']
     logging.info('Processing {0} from the ingest queue'.format(dcp_path))
     dcp = DCP(dcp_path, connection_details)
-
+    ### NEED A WAY FOR SCREENER TO KNOW IT NOW HAS THE DCP IN ITS CONTENT
+    ### PERHAPS THE LIST_DCPS FN CAN CONSULT THE DCP_STORE
 
     
 # Some XML functions to help pull text from DOM nodes.
@@ -125,7 +94,8 @@ def write_and_track_progress(dcp, f):
         # has the downloaded chuck caused the size downloaded to tick over a 1% threshold?
         if floor(100*dcp.progress)-floor(100*old_progress) > 0:
             # we need to inform TMS of the progress we have made
-            print "THIS WOULD INFORM TMS THAT WE HAVE DOWNLOADED {0:.0%} OF THE DCP".format(dcp.progress)
+            logging.info('{0:.0%}'.format(dcp.progress))
+            # print "THIS WOULD INFORM TMS THAT WE HAVE DOWNLOADED {0:.0%} OF THE DCP".format(dcp.progress)
     return write_track_inner
 
 
@@ -143,19 +113,17 @@ class DCP(object):
 
         # initialises the object based on whether ftp details were provided
         if ftp_connection_details:
+            print ftp_connection_details
             logging.info('Initialising {0} using FTP details.'.format(self.uuid))
-            self.state = 'remote'
             self.progress = 0
             self.ftp_connection_details = ftp_connection_details
             # make a dir in the dcp store to put the dcp contents
             if not os.path.isdir(self.dir):
                 os.mkdir(self.dir)
             self.download_and_parse()
-            # self.compute_total_size()
         # if there is a folder already, attempt to initialise from already downloaded files
         elif os.path.isdir(self.dir):
             logging.info('DCP directory already exists for {0}, attempting to parse files.'.format(self.uuid))
-            self.state = 'local'
             # initialise DCP from existing dir
             parse_exisiting_files()
         else:
@@ -174,13 +142,6 @@ class DCP(object):
             logging.info('{0!r}\'s size is {1}'.format(self, self.total_size))
         else:
             logging.error('Could not compute DCP size as not in DCP dir on FTP')
-
-        #### THE OLD WAY OF CALCULATING SIZE, NEEDS ASSETS DOWNLOADED FIRST
-        # if not self.assets:
-        #     logging.info('No assets present to compute DCP({0})\'s size'.format(self.uuid))
-        #     raise Exception('No assets present to compute DCP size.')
-        # for asset in assets:
-        #     self.total_size += asset.size
 
     def parse_exisiting_files(self):
         raise NotImplementedError
