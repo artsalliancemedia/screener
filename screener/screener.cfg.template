@@ -1,0 +1,13 @@
+# Settings for the Screener server
+[server]
+# leave blank for all hostnames
+host=
+port=9500
+
+
+# Settings for the FTP server hosting the DCPs
+[ftp]
+host=
+port=21
+username=
+password=
