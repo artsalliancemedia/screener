@@ -4,6 +4,7 @@ class Schedule(object):
     def __init__(self):
         # List of upcoming scheduled showings ordered by closest date to now() first
         self.schedule = []
+        self.mode = "schedule"
 
         # @todo: Start up thread to actually run the schedule if in schedule mode.
 
@@ -36,7 +37,7 @@ class Schedule(object):
     def delete(self, schedule_id, *args):
         raise NotImplementedError
 
-    def set_mode(mode=True, *args):
+    def set_mode(mode, *args):
         """
         Set if the screen server is in schedule mode, i.e. does it obey the specified schedule or is it being manually overridden
 

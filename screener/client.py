@@ -1,15 +1,14 @@
 '''
 A basic testing client for the Screener app
 '''
-import socket
+import socket, json
 from datetime import datetime
-import json
+
 import klv
 from util import bytes_to_int, bytes_to_str
 
 
 class Comm(object):
-
     def __init__(self, host, port):
         self.host = host
         self.port = port
@@ -26,62 +25,84 @@ class Comm(object):
         self.s.sendall(msg)
         return self.s.recv(1024)
 
-def decode_repsonse(rsp):
-    try:
-        k,v = klv.decode(rsp, 16)
-        return json.loads(bytes_to_str(v))['response']
-    except Exception as err:
-        print 'There was an error with response {0}.\nErr:\n{1}'.format(rsp,err) 
+
+class Client(object):
+    def __init__(self):
+        self.host = 'localhost'
+        self.port = 9500
+
+    def decode_rsp(self, rsp):
+        k, v = klv.decode(rsp, 16)
+        return json.loads(bytes_to_str(v))
+
+    def send(self, handler_key, **kwargs):
+        '''
+        Takes json serialisable python objects and constructs a
+        SMTPE conformant KVL message and sends it via an instance of
+        the connection class, Comm, on the given host and port.
+        '''
+        # See SMPTE ST-336-2007 for details on the header format
+        key = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 8) + [handler_key]
+        if kwargs:
+            value = json.dumps(kwargs)
+            msg = klv.encode(key, value)
+        else:
+            msg = bytearray(key+[0x00]) # 0 length, 0 message
+
+        with Comm(self.host, self.port) as c:
+            return c.send_recv(msg)
 
 
-def send(handler_key, obj=None, host='localhost', port=9500):
-    '''
-    Takes json serialisable python objects and constructs a
-    SMTPE conformant KVL message and sends it via an instance of
-    the connection class, Comm, on the given host and port.
-    '''
-    # See SMPTE ST-336-2007 for details on the header format
-    key = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 8) + [handler_key]
-    if obj:
-        value = json.dumps(obj)
-        msg = klv.encode(key,value)
-    else:
-        msg = bytearray(key+[0x00]) # 0 length, 0 message
+    def play(self):
+        rsp = self.send(0x00)
+        return self.decode_rsp(rsp)
 
-    with Comm(host, port) as c:
-        return c.send_recv(msg)
+    def stop(self):
+        rsp = self.send(0x01)
+        return self.decode_rsp(rsp)
 
+    def status(self):
+        rsp = self.send(0x02)
+        return self.decode_rsp(rsp)
 
-def play(host='localhost', port=9500):
-    rsp = send(0x00, host=host, port=port)
-    return decode_repsonse(rsp)
+    def system_time(self):
+        rsp = self.send(0x03)
+        return datetime.fromtimestamp(self.decode_rsp(rsp))
 
-def stop(host='localhost', port=9500):
-    rsp = send(0x01, host=host, port=port)
-    return decode_repsonse(rsp)
+    def content_uuids(self):
+        rsp = self.send(0x04)
+        return self.decode_rsp(rsp)
 
-def status(host='localhost', port=9500):
-    rsp = send(0x02, host=host, port=port)
-    return decode_repsonse(rsp)
+    def pause(self):
+        rsp = self.send(0x05)
+        return self.decode_rsp(rsp)
 
-def content_uuids(host='localhost', port=9500):
-    rsp = send(0x20, host=host, port=port)
-    return decode_repsonse(rsp)
+    def ingest(self, connection_details, dcp_path):
+        # Sends the ingest DCP command to screener, returns the ingest queue uuid.
+        rsp = self.send(0x06, connection_details=connection_details, dcp_path=dcp_path)
+        return self.decode_rsp(rsp)
 
-def system_time(host='localhost', port=9500):
-    rsp = send(0x40, host=host, port=port)
-    return datetime.fromtimestamp(decode_repsonse(rsp))
+    def get_ingests_info(self, ingest_uuids):
+        rsp = self.send(0x07, ingest_uuids=ingest_uuids)
+        return self.decode_rsp(rsp)
 
-
-def ingest(uuid, host='localhost', port=9500):
-    '''Sends the ingest DCP command to screener, returns the ingest queue uuid.'''
-    rsp = send(0x06, uuid, host=host, port=port)
-    return decode_repsonse(rsp)
+    def get_ingest_info(self, ingest_uuid):
+        rsp = self.send(0x08, ingest_uuid=ingest_uuid)
+        return self.decode_rsp(rsp)
 
 
 if __name__ == '__main__':
+    client = Client()
 
-    uuid = '00a2c129-891d-4fec-a567-01ddc335452d'
-    print 'Ingesting: {0}.\nQueue UUID = {1}'.format(uuid, ingest(uuid))
+    connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd": "pullingest"}
+    dcp_path = '00a2c129-891d-4fec-a567-01ddc335452d'
 
+    ingest_uuid = client.ingest(connection_details, dcp_path)
+    print u'Ingesting DCP: {dcp_path}. Queue UUID: "{ingest_uuid}"'.format(dcp_path=dcp_path, ingest_uuid=ingest_uuid)
+
+    info = client.get_ingests_info([ingest_uuid])
+    print u'DCP Info (should be a list): ', info
+
+    info = client.get_ingest_info(ingest_uuid)
+    print u'DCP Info: ', info
 

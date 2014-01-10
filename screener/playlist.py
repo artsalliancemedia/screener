@@ -1,9 +1,8 @@
 import json
 from uuid import uuid4
-from parsers import SPLParser, SPLParserError
+from smpteparsers.spl import SPLParser, SPLParserError
 from playback import Playback
 from util import str_to_bytes, int_to_bytes
-
 
 
 class Playlist(object):

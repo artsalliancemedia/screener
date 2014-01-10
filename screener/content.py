@@ -1,24 +1,22 @@
 """
 Content management
 """
-import cfg
-from uuid import uuid4
-from util import str_to_bytes, bytes_to_str, IndexableQueue
-from threading import Thread
-import dcp
 import logging
+from uuid import uuid4
+from threading import Thread
+
+from util import str_to_bytes, bytes_to_str, IndexableQueue
+import dcp
 
 class Content(object):
 
     def __init__(self):
         logging.info('Instantiating Content()')
-        # Set up some dummy content for testing
-        self._content = [str(uuid4()) for i in xrange(10)]
 
+        self.content = {}
         self.ingest_queue = IndexableQueue()
-        self.ingest_thread = Thread(target=dcp.process_ingest_queue,
-                                    args=(self.ingest_queue,),
-                                    name='IngestQueue')
+
+        self.ingest_thread = Thread(target=dcp.process_ingest_queue, args=(self.ingest_queue,), name='IngestQueue')
         self.ingest_thread.daemon = True
         self.ingest_thread.start()
 
@@ -26,7 +24,7 @@ class Content(object):
         """
         Returns UUIDs of all content
         """
-        return self._content
+        return self.content
 
     def get_cpls(self, cpl_uuids, *args):
         raise NotImplementedError
@@ -34,25 +32,18 @@ class Content(object):
     def get_cpl(self, cpl_uuid, *args):
         raise NotImplementedError
 
-    def ingest(self, dcp_path, *args):
+    def ingest(self, connection_details, dcp_path, *args):
         """
         Ingest a DCP by pulling in the content from the FTP connection details supplied and the path to the individual DCP.
         """
-        connection_details = {'host': cfg.ftp_host,
-                              'user': cfg.ftp_username,
-                              'passwd': cfg.ftp_password}
-        if dcp_path not in self._content:
-            logging.info('Adding DCP({0}) to the ingest queue'.format(dcp_path))
-            queue_uuid =  self.ingest_queue.put({'connection_details':connection_details,
-                                          'dcp_path':dcp_path})
-            return queue_uuid
-        else:
-            logging.info('DCP{0} is already in the content store. It was not added to queue.')
+        if dcp_path not in self.content:
+            logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
+            ingest_uuid = self.ingest_queue.put((connection_details, 'dcp_path': dcp_path,))
 
+            return ingest_uuid
 
     def cancel_ingest(self, ingest_uuid, *args):
-        self.ingest_queue.remove( (ingest_uuid, self.ingest_queue[ingest_uuid]) )
-        return True
+        del self.ingest_queue[ingest_uuid]
 
     def get_ingest_history(self, *args):
         raise NotImplementedError
@@ -61,7 +52,7 @@ class Content(object):
         raise NotImplementedError
 
     def get_ingests_info(self, ingest_uuids, *args):
-        return [self.ingest_queue[uuid] for uuid in ingest_uuids]
+        return [self.ingest_queue[ingest_uuid] for ingest_uuid in ingest_uuids]
 
     def get_ingest_info(self, ingest_uuid, *args):
         return self.ingest_queue[ingest_uuid]

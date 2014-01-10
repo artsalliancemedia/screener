@@ -1,15 +1,9 @@
 from ftplib import FTP
-import os
-import time
+import os, time, logging
 import xml.dom.minidom as dom
 from base64 import b64encode, b64decode
-from hashlib import sha1
 from math import floor
 from datetime import datetime
-import logging
-
-
-
 
 
 def process_ingest_queue(queue, interval=1):
@@ -21,24 +15,36 @@ def process_ingest_queue(queue, interval=1):
     while 1:
         if not queue.empty():
             item = queue.get()
-            process_ingest_queue_item(item)
+
+            logging.info('Downloading "{0}" from the ingest queue'.format(item[1]))
+            local_dcp_path = download_dcp(*item)
+
+            logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
+            dcp = DCP(local_dcp_path)
+
             queue.task_done()
+
         time.sleep(interval)
 
-def process_ingest_queue_item(item):
-    """
-    Takes FTP connection details and DCP path from queue items and instantiates a DCP object
-    """
-    connection_details = item['connection_details']
-    dcp_path = item['dcp_path']
-    logging.info('Processing {0} from the ingest queue'.format(dcp_path))
-    dcp = DCP(dcp_path, connection_details)
-    ### NEED A WAY FOR SCREENER TO KNOW IT NOW HAS THE DCP IN ITS CONTENT
-    ### PERHAPS THE LIST_DCPS FN CAN CONSULT THE DCP_STORE
 
-    
+def ensure_local_path(dcp_path):
+    dcp_store = os.path.join(os.path.dirname(__file__), u'dcp_store')
+    if not os.path.isdir(dcp_store):
+        os.makedir(dcp_store)
+
+    local_path = os.path.join(dcp_store, dcp_path) ### TODO, make dcp_store configurable
+    if not os.path.isdir(local_path):
+        os.makedir(local_path) # Ensure we have a directory to download to.
+
+    return local_path
+
+def download_dcp(ftp_details, dcp_path):
+    local_path = ensure_local_path(dcp_path)
+
+    ## @todo finish implementing this!
+
 # Some XML functions to help pull text from DOM nodes.
-#
+
 def text_from_node(node):
     text = []
     for child in node.childNodes:
@@ -60,7 +66,7 @@ def text_from_direct_child(node, tag_name):
 
 
 # Some functions to download files from the DCP FTP
-#
+
 def download_text(ftp, dcp, filename):
     '''Downloads text files from an FTP to the DCP directory.
     Uses write_and_track_progress to keep track of how much has been downloaded.'''
@@ -92,7 +98,7 @@ def write_and_track_progress(dcp, f):
         old_progress = dcp.progress
         dcp.progress = float(dcp.downloaded)/dcp.total_size
         # has the downloaded chuck caused the size downloaded to tick over a 1% threshold?
-        if floor(100*dcp.progress)-floor(100*old_progress) > 0:
+        if floor(100*dcp.progress) - floor(100 * old_progress) > 0:
             # we need to inform TMS of the progress we have made
             logging.info('{0:.0%}'.format(dcp.progress))
             # print "THIS WOULD INFORM TMS THAT WE HAVE DOWNLOADED {0:.0%} OF THE DCP".format(dcp.progress)
@@ -101,82 +107,75 @@ def write_and_track_progress(dcp, f):
 
 class DCP(object):
     
-    def __init__(self, uuid, ftp_connection_details=None):
-        logging.info('Instantiating DCP({0})'.format(uuid))
-        self.uuid = uuid
-        self.dir = os.path.join('dcp_store',uuid) ### TODO, make dcp_store configurable
-        logging.info('DCP Store: {0}'.format(self.dir))
+    def __init__(self, ftp_details, dcp_path):
+        self.remote_path = dcp_path
+        self.local_path = os.path.join(os.path.dirname(__file__), u'dcp_store', dcp_path) ### TODO, make dcp_store configurable
+        logging.info('DCP Store: {0}'.format(self.local_path))
+
         self.total_size = 0
         self.downloaded = 0
         self.assets = {}
         self.cpls = {}
 
         # initialises the object based on whether ftp details were provided
-        if ftp_connection_details:
-            print ftp_connection_details
-            logging.info('Initialising {0} using FTP details.'.format(self.uuid))
+        if ftp_details:
             self.progress = 0
-            self.ftp_connection_details = ftp_connection_details
-            # make a dir in the dcp store to put the dcp contents
-            if not os.path.isdir(self.dir):
-                os.mkdir(self.dir)
-            self.download_and_parse()
-        # if there is a folder already, attempt to initialise from already downloaded files
-        elif os.path.isdir(self.dir):
-            logging.info('DCP directory already exists for {0}, attempting to parse files.'.format(self.uuid))
-            # initialise DCP from existing dir
-            parse_exisiting_files()
-        else:
-            logging.info('Unable to construct DCP.')
-            raise Exception('Unable to construct DCP, DCP not present.')
+            self.ftp_details = ftp_details
 
-    def compute_total_size(self, ftp):
-        '''Loops through FTP LISTing and counts the DCP's total size.'''
 
-        if self.uuid in ftp.pwd():
-            logging.info('Computing {0!r}\'s size.'.format(self))
-            def count_filesize(dir_line):
-                filesize = int(dir_line.split()[4])
-                self.total_size += filesize
-            ftp.retrlines('LIST', count_filesize)
-            logging.info('{0!r}\'s size is {1}'.format(self, self.total_size))
-        else:
-            logging.error('Could not compute DCP size as not in DCP dir on FTP')
 
-    def parse_exisiting_files(self):
-        raise NotImplementedError
+        #     logging.info('DCP directory already exists for {0}, attempting to parse files.'.format(self.uuid))
+        #     # initialise DCP from existing dir
+        #     parse_exisiting_files()
+        # else:
+        #     logging.info('Unable to construct DCP.')
+        #     raise Exception('Unable to construct DCP, DCP not present.')
 
-    def download_and_parse(self):
+    # def compute_total_size(self, ftp):
+    #     '''Loops through FTP LISTing and counts the DCP's total size.'''
+
+    #     if self.uuid in ftp.pwd():
+    #         logging.info('Computing {0!r}\'s size.'.format(self))
+    #         def count_filesize(dir_line):
+    #             filesize = int(dir_line.split()[4])
+    #             self.total_size += filesize
+    #         ftp.retrlines('LIST', count_filesize)
+    #         logging.info('{0!r}\'s size is {1}'.format(self, self.total_size))
+    #     else:
+    #         logging.error('Could not compute DCP size as not in DCP dir on FTP')
+
+    def download(self):
         '''
         Uses the connection_details to connect to the FTP server, downloads the common files then
         downloads and parses the other assets from the details in them.
         '''
         logging.info('Connecting to FTP')
         try:
-            ftp = FTP(**self.ftp_connection_details)
-        except Exception as err:
-            logging.error('Could not connect to FTP')
-            os.rmdir(os.path.join('dcp_store',self.uuid))
-            logging.error(str(err))
-            return False
+            ftp = FTP(**self.ftp_details)
+        except:
+            # Clean up if the connection
+            os.rmdir(self.local_path)
+
         # change dir on the FTP
         try:
-            ftp.cwd(self.uuid)
+            ftp.cwd(self.remote_path)
         except:
-            logging.error('Error trying to change to dir {0} on FTP'.format(self.uuid))
-            raise Exception('Dir {0} not present on {1}'.format(self.uuid, self.ftp_connection_details['host']))
+            logging.error('Error trying to change to dir {0} on FTP'.format(self.remote_path))
+            raise Exception('Dir {0} not present on {1}'.format(self.remote_path, self.ftp_details['host']))
 
         self.compute_total_size(ftp)
         download_text(ftp, self, 'VOLINDEX') # legacy, but counts toward download total!
         download_text(ftp, self, 'ASSETMAP')
+
         logging.info('Parsing assets')
-        self.parse_and_download_assets(ftp)
+        self.parse_assets(ftp)
+
         logging.info('Parsing CPLs')
         self.parse_cpls()
 
         ftp.quit()
 
-    def parse_and_download_assets(self, ftp):
+    def parse_assets(self, ftp):
         '''
         Reads the DCP's ASSETMAP and packing list to parse info on all the contained assets
         storing them all in the DCP assets dictionary.
