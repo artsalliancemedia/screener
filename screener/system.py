@@ -2,7 +2,7 @@
 System time
 """
 from time import time
-from util import int_to_bytes
+from screener.util import int_to_bytes
 
 def system_time(*args):
     """

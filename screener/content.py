@@ -5,8 +5,8 @@ import logging
 from uuid import uuid4
 from threading import Thread
 
-from util import str_to_bytes, bytes_to_str, IndexableQueue
-import dcp
+from screener.util import str_to_bytes, bytes_to_str, IndexableQueue
+from screener import dcp
 
 class Content(object):
 

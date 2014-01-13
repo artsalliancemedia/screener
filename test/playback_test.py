@@ -6,7 +6,7 @@ import unittest
 import json
 from datetime import datetime
 from screener.util import bytes_to_int, bytes_to_str
-from screener.app import ScreenServer
+from screener.app import Screener
 import klv
 
 class TestPlayback(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestPlayback(unittest.TestCase):
     """
 
     def setUp(self):
-        self.s = ScreenServer()
+        self.s = Screener()
 
     def test_status(self):
         # Check status is STOP

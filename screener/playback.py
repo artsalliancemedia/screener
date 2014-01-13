@@ -2,7 +2,7 @@
 Playback functions
 """
 import json
-from util import int_to_bytes, str_to_bytes
+from screener.util import int_to_bytes, str_to_bytes
 
 STOP, PLAY, PAUSE = range(3)
 
