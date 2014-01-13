@@ -16,7 +16,7 @@ class Content(object):
         self.content = {}
         self.ingest_queue = IndexableQueue()
 
-        self.ingest_thread = Thread(target=dcp.process_ingest_queue, args=(self.ingest_queue,), name='IngestQueue')
+        self.ingest_thread = Thread(target=dcp.process_ingest_queue, args=(self.ingest_queue, self.content), name='IngestQueue')
         self.ingest_thread.daemon = True
         self.ingest_thread.start()
 
@@ -38,7 +38,7 @@ class Content(object):
         """
         if dcp_path not in self.content:
             logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
-            ingest_uuid = self.ingest_queue.put((connection_details, 'dcp_path': dcp_path,))
+            ingest_uuid = self.ingest_queue.put({'ftp_details': connection_details, 'dcp_path': dcp_path})
 
             return ingest_uuid
 

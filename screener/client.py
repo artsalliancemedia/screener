@@ -28,7 +28,7 @@ class Comm(object):
 
 class Client(object):
     def __init__(self):
-        self.host = 'localhost'
+        self.host = u'localhost'
         self.port = 9500
 
     def decode_rsp(self, rsp):
@@ -95,7 +95,9 @@ if __name__ == '__main__':
     client = Client()
 
     connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd": "pullingest"}
-    dcp_path = '00a2c129-891d-4fec-a567-01ddc335452d'
+    dcp_path = '0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a'
+    # 0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a # With sub-folder
+    # 00a2c129-891d-4fec-a567-01ddc335452d # Without sub-folder.
 
     ingest_uuid = client.ingest(connection_details, dcp_path)
     print u'Ingesting DCP: {dcp_path}. Queue UUID: "{ingest_uuid}"'.format(dcp_path=dcp_path, ingest_uuid=ingest_uuid)

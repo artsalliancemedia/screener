@@ -40,7 +40,10 @@ class Playback(object):
 
                 0 -- Success
         """
-        raise NotImplementedError
+        self.state = STOP
+        self.loaded_cpl = None
+
+        return int_to_bytes(0)
 
     def play(self, *args):
         self.state = PLAY
