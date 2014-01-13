@@ -1,11 +1,11 @@
-'''
-Settings for Screener
-'''
+#!/usr/bin/evn python
+#
+# Configuration options for Screener
 
-import ConfigParser
+import logging, os.path
 
-config = ConfigParser.ConfigParser()
-config.read('screener.cfg')
+from screener.lib import config as c
 
-screener_host = config.get('server','host')
-screener_port = config.getint('server','port')
+config_file = c.OptionStr('app', 'config_file', os.path.join(os.path.dirname(__file__), 'screener.cfg'), False, False)
+screener_host = c.OptionStr('app', 'host', '0.0.0.0', description='The listen address for Screener. It will listen on all available network addresses if set to 0.0.0.0')
+screener_port = c.OptionNum('app', 'port', 9500, description='The port that the Screener socket listens on.')

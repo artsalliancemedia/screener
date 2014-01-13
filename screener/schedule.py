@@ -1,4 +1,4 @@
-import playlist
+import screener.playlist
 
 class Schedule(object):
     def __init__(self):

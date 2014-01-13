@@ -6,12 +6,13 @@ import logging, json
 
 import klv
 
-import cfg
-from util import int_to_bytes, bytes_to_str
-from system import system_time
-from playback import Playback
-from content import Content
-from schedule import Schedule
+from screener import cfg
+from screener.lib import config as config_handler
+from screener.util import int_to_bytes, bytes_to_str
+from screener.system import system_time
+from screener.playback import Playback
+from screener.content import Content
+from screener.schedule import Schedule
 
 
 # See SMPTE ST-336-2007 for details on the header format
@@ -81,10 +82,12 @@ def setup_logging():
 
 
 if __name__ == '__main__':
+    config_handler.read(cfg.config_file())
+    config_handler.save()
     setup_logging()
 
     logging.info('Setting up Screener')
-    reactor.listenTCP(cfg.screener_port, ScreenerFactory(), interface=cfg.screener_host)
+    reactor.listenTCP(cfg.screener_port(), ScreenerFactory(), interface=cfg.screener_host())
 
-    logging.info('Serving on localhost:{0}'.format(cfg.screener_port))
+    logging.info('Serving on localhost:{0}'.format(cfg.screener_port()))
     reactor.run()
