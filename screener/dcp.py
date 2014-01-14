@@ -86,6 +86,8 @@ class DCPDownloader(object):
         to_parent_dir(self.ftp, path)
 
         for local, server in zip(local_paths, server_paths):
+            if '\\' in local:
+                check_directories_exist(local_path, local)
             if local[-4:] == '.mxf': #binary file
                 print "{0} - binary".format(local)
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
@@ -190,6 +192,18 @@ def to_parent_dir(ftp, path):
         ftp.cwd('..') # Go back to where we started from so we don't get ourselves into a hole.
 
 # Some functions to download files from the DCP FTP
+
+def check_directories_exist(local_path, localname):
+    parts = localname.split("\\")
+    path = ""
+    for part in parts[:-1]:
+        path += part
+        path += "\\"
+        print "Checking directory: {0}".format(os.path.join(local_path, path))
+        if not os.path.isdir(os.path.join(local_path, path)):
+            print "Making dir: {0}".format(os.path.join(local_path, path))
+            os.mkdir(os.path.join(local_path, path))
+
 
 def download_text(ftp, progress_tracker, local_path, localname, servername):
     '''Downloads text files from an FTP to the DCP directory.
