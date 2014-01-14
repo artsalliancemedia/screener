@@ -18,20 +18,8 @@ from screener.schedule import Schedule
 # See SMPTE ST-336-2007 for details on the header format
 HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
 
-
-class Screener(protocol.Protocol):
-    def __init__(self, factory):
-        logging.info('Instantiating Screener()')
-        self.factory = factory
-
-    def dataReceived(self, data):
-        return_data = self.factory.process_klv(data)
-        self.transport.write(str(return_data))
-
-
-class ScreenerFactory(protocol.Factory):
+class ScreenServer(object):
     def __init__(self):
-        logging.info('Instantiating ScreenerFactory()')
         self.content = Content()
         self.playback = Playback()
         self.schedule = Schedule()
@@ -48,9 +36,6 @@ class ScreenerFactory(protocol.Factory):
                 0x08 : self.content.get_ingest_info
             }
 
-    def buildProtocol(self, addr):
-        return Screener(self)
-
     def process_klv(self, msg):
         """
         Processes a KLV message by extracting JSON string from msg
@@ -59,13 +44,29 @@ class ScreenerFactory(protocol.Factory):
         k, v = klv.decode(msg, 16)
         handler = self.handlers[k[15]]
 
-        decoded_val = json.loads(bytes_to_str(v))
-        result = handler(**decoded_val) or ''
+        val = bytes_to_str(v)
+        decoded_val = json.loads(val) if val else {}
+        result = handler(**decoded_val)
 
         return klv.encode(HEADER, json.dumps(result))
 
     def reset(self):
         self.__init__()
+
+
+class Screener(protocol.Protocol):
+    def __init__(self):
+        logging.info('Instantiating Screener()')
+        self.screener = ScreenServer()
+
+    def dataReceived(self, data):
+        return_data = self.screener.process_klv(data)
+        self.transport.write(str(return_data))
+
+
+class ScreenerFactory(protocol.Factory):
+    def buildProtocol(self, addr):
+        return Screener()
 
 
 def setup_logging():

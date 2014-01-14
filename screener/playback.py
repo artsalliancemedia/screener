@@ -2,7 +2,6 @@
 Playback functions
 """
 import json
-from screener.util import int_to_bytes, str_to_bytes
 
 STOP, PLAY, PAUSE = range(3)
 
@@ -29,7 +28,7 @@ class Playback(object):
         """
         self.loaded_cpl = cpl
 
-        return int_to_bytes(0)
+        return 0
 
     def eject(self, *args):
         """
@@ -43,23 +42,25 @@ class Playback(object):
         self.state = STOP
         self.loaded_cpl = None
 
-        return int_to_bytes(0)
+        return 0
 
     def play(self, *args):
         self.state = PLAY
-        return int_to_bytes(0)
+
+        print 0
+        return 0
 
     def stop(self, *args):
         self.state = STOP
-        return int_to_bytes(0)
+        return 0
 
     def pause(self, *args):
         self.state = PAUSE
-        return int_to_bytes(0)
+        return 0
 
     def status(self, *args):
         state = { 'state' : self.state }
         if self.loaded_cpl:
             state['cpl'] = self.loaded_cpl
 
-        return str_to_bytes(json.dumps(state))
+        return state
