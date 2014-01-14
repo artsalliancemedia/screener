@@ -3,6 +3,8 @@ import os, time, logging
 from math import floor
 from datetime import datetime
 
+import Queue
+
 from smpteparsers.dcp import DCP
 
 
@@ -29,8 +31,11 @@ class DCPDownloader(object):
 
     def __enter__(self):
         logging.info('Connecting to FTP')
+        
+        ftp_mode = True if self.ftp_details['mode'] == 'passive' else False
 
         self.ftp = FTP()
+        self.ftp.set_pasv(ftp_mode)
         self.ftp.connect(host=self.ftp_details['host'], port=(self.ftp_details['port'] or 21))
 
         if 'user' in self.ftp_details or 'passwd' in self.ftp_details:
@@ -48,11 +53,13 @@ class DCPDownloader(object):
         items, total_size = self.get_folder_info(self.ftp, path)
         print items, total_size
 
-        self.ftp.cwd(path)
+#         self.ftp.cwd(path)
         # @todo: Finish off downloading the DCP files and storing them locally.
 
         to_parent_dir(self.ftp, path)
 
+        print "Finished getting folder info.\nCurrent path on ftp server: {0}".format(self.ftp.pwd())
+        
         return local_path
 
     def get_folder_info(self, ftp, path):
@@ -60,27 +67,42 @@ class DCPDownloader(object):
         Recursively aggregate the DCP folder contents so we know what we're dealing with.
         """
         print path
-        ftp.cwd(path)
+#         ftp.cwd(path)
 
         # Not particularly happy about having to do it this way (saving to the object), but it'll work for now.
         self.items = []
         self.total_size = 0
+        queue = Queue.Queue()
 
         def process_line(line):
             parts = line.split()
             print parts
-
+ 
             if parts[0][0] == 'd': # Checks the permission signature :)
                 # Must be a directory, lets recurse.
-                items, total_size = self.get_folder_info(ftp, parts[8])
-                self.items.extend(items)
-                self.total_size += total_size
+                print "Found a directory: {0}".format(parts[8])
+                queue.put(parts[8])
+#                 ftp.retrlines('LIST', process_line)
+#                 to_parent_dir(ftp, path)
+#                 items, total_size = self.get_folder_info(ftp, parts[8])
+#                 self.items.extend(items)
+#                 self.total_size += total_size
             else:
                 self.items.append(parts[8])
                 self.total_size += int(parts[4])
 
-        ftp.retrlines('LIST', process_line)
+        queue.put(path)
+        while not queue.empty():
+            p = queue.get()
+            # print "p: {0}".format(p)
+            ftp.cwd(p)
+            ftp.retrlines('LIST', process_line)
+            
         to_parent_dir(ftp, path)
+        
+        # print "RETURNING items: {items}\nTotal size: {total}".format(items=self.items, total=self.total_size)
+
+        # print "current path: {0}".format(ftp.pwd())
 
         return self.items, self.total_size
 
@@ -142,4 +164,3 @@ def write_download(dcp, f):
             logging.info('{0:.0%}'.format(dcp.progress))
 
     return write_chunk
-
