@@ -11,7 +11,7 @@ from screener.lib import config as config_handler
 from screener.util import int_to_bytes, bytes_to_str
 from screener.system import system_time
 from screener.playback import Playback
-from screener.playlist import Playlists
+from screener.playlists import Playlists
 from screener.content import Content
 from screener.schedule import Schedule
 
