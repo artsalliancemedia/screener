@@ -4,6 +4,10 @@ from math import floor
 from datetime import datetime
 from hashlib import sha1, md5, sha224, sha256, sha384, sha512
 import base64
+try:
+    import xml.etree.cElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
 
 import Queue
 
@@ -22,6 +26,7 @@ def process_ingest_queue(queue, content_store, interval=1):
 
             logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
             dcp = DCP(local_dcp_path)
+            parse_dcp(local_dcp_path, local_dcp_files)
 
             queue.task_done()
 
@@ -77,7 +82,6 @@ class DCPDownloader(object):
 
         to_parent_dir(self.ftp, path)
 
-        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
                 rightmost_slash = local.rfind("\\")
@@ -89,9 +93,7 @@ class DCPDownloader(object):
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
                 download_text(self.ftp, progress_tracker, local_path, local, server)
-        """
 
-        generate_hash(os.path.join(local_path, local_paths[1]))
 
         """
         print "LOCAL FILE PATHS:"
@@ -121,7 +123,7 @@ class DCPDownloader(object):
 
     def get_folder_info(self, ftp, path):
         """
-        Recursively aggregate the DCP folder contents so we know what we're dealing with.
+        Aggregate the DCP folder contents so we know what we're dealing with.
         """
 #         ftp.cwd(path)
 
@@ -144,7 +146,6 @@ class DCPDownloader(object):
         current_path = ftp.pwd()
         while not queue.empty():
             p = queue.get()
-            # print "p: {0}".format(p)
             ftp.cwd(p)
             current_path = "{directory}{slash}".format(directory=ftp.pwd(),
                     slash="/")
@@ -154,29 +155,58 @@ class DCPDownloader(object):
         
         return self.items, self.total_size
 
-    # def parse_dcp(self, local_dcp_path, local_dcp_files):
+def parse_dcp(local_dcp_path, local_dcp_files):
+    """
+    Establish and parse ASSETMAP and pkl files so we can verify downloads
+    and check hashes
+    """
+
+    assetmap_path = ""
+    pkl_path = ""
+
+    assetmap_found = False
+    pkl_found = False
+    for filename in local_dcp_files:
+        if "assetmap" in filename.lower():
+            print "Found ASSETMAP file at: {0}".format(os.path.join(local_dcp_path, filename))
+            assetmap_path = os.path.join(local_dcp_path, filename)
+            assetmap_found = True
+        elif "pkl.xml" in filename.lower():
+            print "Found pkl.xml file at: {0}".format(os.path.join(local_dcp_path, filename))
+            pkl_path = os.path.join(local_dcp_path, filename)
+            pkl_found = True
+        if assetmap_found and pkl_found:
+            break
+
+    # tree = ET.ElementTree(file=assetmap_path)
+    tree = ET.parse(assetmap_path)
+    root = tree.getroot()
+    print "root: {0}".format(root.attrib)
+    for elem in tree.getiterator():
+        print elem.tag
+
+    generate_hash(os.path.join(local_dcp_path, local_dcp_files[1]))
 
 
 # Some util functions.
 
-# @todo: Finish function to generate hashes for downloaded files
 def generate_hash(local_path):
+    """
+    Work out the base64 encoded sha-1 hash of the file so we can compare
+    integrity with hashes in pkl.xml file
+    """
     chunk_size = 1048576 # 1mb
     file_sha1 = sha1()
-    with open(r"{0}".format(local_path), "rb") as f:
+    with open(r"{0}".format(local_path), "r") as f:
         chunk = f.read(chunk_size)
         file_sha1.update(chunk)
         while chunk:
             chunk = f.read(chunk_size)
             file_sha1.update(chunk)
     file_hash = file_sha1.digest()
-    logging.info("Hash for {0}: {1}".format(local_path, file_hash))
-    logging.info("b64encode for {0}: {1}".format(file_hash,
+    logging.info("Hash for {0}: {1}".format(local_path,
         base64.b64encode(file_hash)))
-    with open("hashes.txt", 'w') as f:
-        f.write(base64.b64encode(file_hash))
     return file_hash
-
 
 def ensure_local_path(remote_path):
     # Just in case this is the first run, make sure we have the parent directory as well.
@@ -212,7 +242,7 @@ def download_text(ftp, progress_tracker, local_path, localname, servername):
     Uses write_download to keep track of how much has been downloaded.'''
     with open(os.path.join(local_path, localname), 'w') as f:
         logging.info("Starting download: {0}".format(servername))
-        ftp.retrlines('RETR {0}'.format(servername),
+        ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
 
     # @todo: Emit event that download is complete
