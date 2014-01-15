@@ -82,6 +82,7 @@ class DCPDownloader(object):
 
         to_parent_dir(self.ftp, path)
 
+        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
                 rightmost_slash = local.rfind("\\")
@@ -93,7 +94,7 @@ class DCPDownloader(object):
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
                 download_text(self.ftp, progress_tracker, local_path, local, server)
-
+        """
 
         """
         print "LOCAL FILE PATHS:"
@@ -178,14 +179,30 @@ def parse_dcp(local_dcp_path, local_dcp_files):
         if assetmap_found and pkl_found:
             break
 
-    # tree = ET.ElementTree(file=assetmap_path)
+    # get file paths from ASSETMAP FILE
     tree = ET.parse(assetmap_path)
-    root = tree.getroot()
-    print "root: {0}".format(root.attrib)
+    paths = []
     for elem in tree.getiterator():
-        print elem.tag
+        if elem.tag[-4:] == "Path":
+            # print "{0}\t\t{1}".format(elem.tag[-4:], elem.text)
+            paths.append(elem.text)
 
-    generate_hash(os.path.join(local_dcp_path, local_dcp_files[1]))
+    # get hashes from pkl.xml file
+    tree = ET.parse(pkl_path)
+    hashes = []
+    for elem in tree.getiterator():
+        if elem.tag[-4:] == "Hash":
+            # print "{0}\t\t{1}".format(elem.tag[-4:], elem.text)
+            print elem.text
+            hashes.append(elem.text)
+
+    """
+    for filehash in hashes:
+        local_hash 
+    """
+
+
+    # generate_hash(os.path.join(local_dcp_path, local_dcp_files[1]))
 
 
 # Some util functions.
@@ -204,9 +221,9 @@ def generate_hash(local_path):
             chunk = f.read(chunk_size)
             file_sha1.update(chunk)
     file_hash = file_sha1.digest()
-    logging.info("Hash for {0}: {1}".format(local_path,
-        base64.b64encode(file_hash)))
-    return file_hash
+    encoded_hash = base64.b64encode(file_hash)
+    logging.info("Hash for {0}: {1}".format(local_path, encoded_hash))
+    return encoded_hash
 
 def ensure_local_path(remote_path):
     # Just in case this is the first run, make sure we have the parent directory as well.
@@ -241,6 +258,7 @@ def download_text(ftp, progress_tracker, local_path, localname, servername):
     '''Downloads text files from an FTP to the DCP directory.
     Uses write_download to keep track of how much has been downloaded.'''
     with open(os.path.join(local_path, localname), 'w') as f:
+        # logging.info("Starting download: {0}".format(servername))
         logging.info("Starting download: {0}".format(servername))
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
@@ -254,7 +272,7 @@ def download_bin(ftp, progress_tracker, local_path, localname, servername):
     # pipe data to /dev/null
     
     with open(os.devnull, 'wb') as f:
-        logging.info("Attempting download: {0}".format(servername))
+        logging.info("Starting download: {0}".format(servername))
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
    
