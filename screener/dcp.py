@@ -2,6 +2,8 @@ from ftplib import FTP
 import os, time, logging
 from math import floor
 from datetime import datetime
+from hashlib import sha1, md5, sha224, sha256, sha384, sha512
+import base64
 
 import Queue
 
@@ -16,7 +18,7 @@ def process_ingest_queue(queue, content_store, interval=1):
 
             logging.info('Downloading "{0}" from the ingest queue'.format(item['dcp_path']))
             with DCPDownloader(item['ftp_details']) as dcp_downloader:
-                local_dcp_path = dcp_downloader.download(item['dcp_path'])
+                local_dcp_path, local_dcp_files = dcp_downloader.download(item['dcp_path'])
 
             logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
             dcp = DCP(local_dcp_path)
@@ -49,19 +51,11 @@ class DCPDownloader(object):
     def download(self, path):
         local_path = ensure_local_path(path)
 
-        print "\nDownload path: {0}\n".format(path)
-
         # Work out what we're dealing with, store this info on the object itself for easy access :)
         items, total_size = self.get_folder_info(self.ftp, path)
-        print "Files:"
-        for item in items:
-            print item
-        print "Total size: {0}".format(total_size)
 
 #         self.ftp.cwd(path)
         # @todo: Finish off downloading the DCP files and storing them locally.
-
-        print "\nLocal file path: {0}\n".format(local_path)
 
         local_paths = []
         server_paths = []
@@ -71,8 +65,6 @@ class DCPDownloader(object):
                 "total_size" : total_size,
                 "progress" : 0
                 }
-
-        print "Progress tracker:\n{0}".format(progress_tracker)
 
         for item in items:
             # local path stuff
@@ -85,15 +77,21 @@ class DCPDownloader(object):
 
         to_parent_dir(self.ftp, path)
 
+        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
-                check_directories_exist(local_path, local)
+                rightmost_slash = local.rfind("\\")
+                directory_path = local[:rightmost_slash+1]
+                print "directory_path: {0}".format(directory_path)
+                if not os.path.isdir(os.path.join(local_path, directory_path)):
+                    create_directories(local_path, local)
             if local[-4:] == '.mxf': #binary file
-                print "{0} - binary".format(local)
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
-                print "{0} - text".format(local)
                 download_text(self.ftp, progress_tracker, local_path, local, server)
+        """
+
+        generate_hash(os.path.join(local_path, local_paths[1]))
 
         """
         print "LOCAL FILE PATHS:"
@@ -117,15 +115,14 @@ class DCPDownloader(object):
                     localfilepath)
         """
 
-        print "Finished getting folder info.\nCurrent path on ftp server: {0}".format(self.ftp.pwd())
+        logging.info("Finished getting folder info.")
         
-        return local_path
+        return local_path, local_paths
 
     def get_folder_info(self, ftp, path):
         """
         Recursively aggregate the DCP folder contents so we know what we're dealing with.
         """
-        print path
 #         ftp.cwd(path)
 
         # Not particularly happy about having to do it this way (saving to the object), but it'll work for now.
@@ -135,17 +132,9 @@ class DCPDownloader(object):
 
         def process_line(line):
             parts = line.split()
-            print parts
  
             if parts[0][0] == 'd': # Checks the permission signature :)
-                # Must be a directory, lets recurse.
-                print "Found a directory: {0}".format(parts[8])
                 queue.put(parts[8])
-#                 ftp.retrlines('LIST', process_line)
-#                 to_parent_dir(ftp, path)
-#                 items, total_size = self.get_folder_info(ftp, parts[8])
-#                 self.items.extend(items)
-#                 self.total_size += total_size
             else:
                 self.items.append("{path}{filename}".format(path=current_path,
                     filename=parts[8]))
@@ -153,27 +142,41 @@ class DCPDownloader(object):
 
         queue.put(path)
         current_path = ftp.pwd()
-        print "CURRENT PATH: {0}".format(current_path)
         while not queue.empty():
             p = queue.get()
             # print "p: {0}".format(p)
             ftp.cwd(p)
             current_path = "{directory}{slash}".format(directory=ftp.pwd(),
                     slash="/")
-            # replace forward slashes with backward slashes for Windows paths
-            # current_path = current_path.replace("/", "\\")
-            print "CURRENT PATH: {0}".format(current_path)
             ftp.retrlines('LIST', process_line)
             
         to_parent_dir(ftp, path)
         
-        # print "RETURNING items: {items}\nTotal size: {total}".format(items=self.items, total=self.total_size)
-
-        # print "current path: {0}".format(ftp.pwd())
-
         return self.items, self.total_size
 
+    # def parse_dcp(self, local_dcp_path, local_dcp_files):
+
+
 # Some util functions.
+
+# @todo: Finish function to generate hashes for downloaded files
+def generate_hash(local_path):
+    chunk_size = 1048576 # 1mb
+    file_sha1 = sha1()
+    with open(r"{0}".format(local_path), "rb") as f:
+        chunk = f.read(chunk_size)
+        file_sha1.update(chunk)
+        while chunk:
+            chunk = f.read(chunk_size)
+            file_sha1.update(chunk)
+    file_hash = file_sha1.digest()
+    logging.info("Hash for {0}: {1}".format(local_path, file_hash))
+    logging.info("b64encode for {0}: {1}".format(file_hash,
+        base64.b64encode(file_hash)))
+    with open("hashes.txt", 'w') as f:
+        f.write(base64.b64encode(file_hash))
+    return file_hash
+
 
 def ensure_local_path(remote_path):
     # Just in case this is the first run, make sure we have the parent directory as well.
@@ -193,15 +196,14 @@ def to_parent_dir(ftp, path):
 
 # Some functions to download files from the DCP FTP
 
-def check_directories_exist(local_path, localname):
+def create_directories(local_path, localname):
     parts = localname.split("\\")
     path = ""
     for part in parts[:-1]:
         path += part
         path += "\\"
-        print "Checking directory: {0}".format(os.path.join(local_path, path))
         if not os.path.isdir(os.path.join(local_path, path)):
-            print "Making dir: {0}".format(os.path.join(local_path, path))
+            logging.info("Making dir: {0}".format(os.path.join(local_path, path)))
             os.mkdir(os.path.join(local_path, path))
 
 
@@ -209,10 +211,12 @@ def download_text(ftp, progress_tracker, local_path, localname, servername):
     '''Downloads text files from an FTP to the DCP directory.
     Uses write_download to keep track of how much has been downloaded.'''
     with open(os.path.join(local_path, localname), 'w') as f:
+        logging.info("Starting download: {0}".format(servername))
         ftp.retrlines('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
 
     # @todo: Emit event that download is complete
+    logging.info("Download of {0} complete.".format(servername))
 
 def download_bin(ftp, progress_tracker, local_path, localname, servername):
     '''Downloads binary files from an FTP to the DCP directory but writes them to /dev/null (or NULL on win32).
@@ -220,8 +224,8 @@ def download_bin(ftp, progress_tracker, local_path, localname, servername):
     # pipe data to /dev/null
     
     with open(os.devnull, 'wb') as f:
-        print "Attempting download - RETR {0}".format(servername[1:])
-        ftp.retrbinary('RETR {0}'.format(servername[1:]),
+        logging.info("Attempting download: {0}".format(servername))
+        ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
    
 
@@ -230,6 +234,7 @@ def download_bin(ftp, progress_tracker, local_path, localname, servername):
         f.write('Dummy placeholder')
 
     # @todo: Emit event that download is complete
+    logging.info("Download of {0} complete.".format(servername))
 
 def write_download(progress_tracker, f):
     '''
@@ -238,20 +243,12 @@ def write_download(progress_tracker, f):
     '''
     def write_chunk(chunk, progress_tracker=progress_tracker, f=f):
         f.write(chunk)
-        # print "length of chunk: {0}".format(len(chunk))
         progress_tracker["downloaded"] += len(chunk)
-        # print "progress_tracker[downloaded]: {0}".format(progress_tracker["downloaded"])
-        # print "writing chunk"
         old_progress = progress_tracker["progress"]
-        # print "old_progress: {0}".format(old_progress)
         progress_tracker["progress"] = float(progress_tracker["downloaded"]) / progress_tracker["total_size"]
-        # print "progress_tracker[progress]: {0}".format(progress_tracker["progress"])
-        # print "progress_tracker[total_size]: {0}".format(progress_tracker["total_size"])
 
-        # has the downloaded chuck caused the size downloaded to tick over a 1% threshold?
-        # print floor(100 * progress_tracker["downloaded"]) - floor(100 * old_progress)
         if floor(100 * progress_tracker["progress"]) - floor(100 * old_progress) > 0:
             # @todo: Emit event with progress made
-            logging.info('{0:.0%}'.format(progress_tracker["progress"]))
+            logging.info('Download progress: {0:.0%}'.format(progress_tracker["progress"]))
 
     return write_chunk
