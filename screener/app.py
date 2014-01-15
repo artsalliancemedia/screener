@@ -22,30 +22,51 @@ HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
 class ScreenServer(object):
     def __init__(self):
         self.content = Content()
-        self.playlists = Playlists(self.content)
+        self.playlists = Playlists()
         self.playback = Playback(self.content, self.playlists)
         self.schedule = Schedule(self.content, self.playlists, self.playback)
 
+        # @todo: Work out what to do with numbering. Provisional idea is content spans 1-20, playlists 21-40 etc.
+        # @todo: Make these hex instead of decimal!!!
         self.handlers = {
-                0x00 : self.playback.play,
-                0x01 : self.playback.stop,
-                0x02 : self.playback.status,
-                0x03 : system_time,
-                0x04 : self.content.get_cpl_uuids,
-                0x05 : self.playback.pause,
+                0x29 : self.content.get_cpl_uuids,
+                0x30 : self.content.get_cpls,
+                0x31 : self.content.get_cpl,
                 0x06 : self.content.ingest,
                 0x07 : self.content.get_ingests_info,
                 0x08 : self.content.get_ingest_info,
+                0x32 : self.content.cancel_ingest,
+                0x33 : self.content.get_ingest_history,
+                0x34 : self.content.clear_ingest_history,
+
+                0x26 : self.playlists.get_playlist_uuids,
+                0x27 : self.playlists.get_playlists,
+                0x28 : self.playlists.get_playlist,
+                0x16 : self.playlists.insert_playlist,
+                0x17 : self.playlists.update_playlist,
+                0x18 : self.playlists.delete_playlist,
+
                 0x09 : self.playback.load_cpl,
                 0x10 : self.playback.load_playlist,
                 0x11 : self.playback.eject,
+                0x00 : self.playback.play,
+                0x01 : self.playback.stop,
+                0x02 : self.playback.status,
+                0x05 : self.playback.pause,
                 0x12 : self.playback.skip_forward,
                 0x13 : self.playback.skip_backward,
                 0x14 : self.playback.skip_to_position,
                 0x15 : self.playback.skip_to_event,
-                0x16 : self.playlists.insert_playlist,
-                0x17 : self.playlists.update_playlist,
-                0x18 : self.playlists.delete_playlist
+
+                0x19 : self.schedule.get_schedule_uuids,
+                0x20 : self.schedule.get_schedules,
+                0x21 : self.schedule.get_schedule,
+                0x22 : self.schedule.schedule_cpl,
+                0x23 : self.schedule.schedule_playlist,
+                0x24 : self.schedule.delete_schedule,
+                0x25 : self.schedule.set_mode,
+
+                0x03 : system_time
             }
 
     def process_klv(self, msg):

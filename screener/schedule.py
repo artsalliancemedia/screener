@@ -16,10 +16,86 @@ class Schedule(object):
         # @todo: Start up thread to actually run the schedule if in schedule mode.
 
     def get_schedule_uuids(self, *args):
-        raise NotImplementedError
+        """
+        Grab the UUID's of all the schedules on the system
 
-    def get_schedule_info(self, schedule_uuid, *args):
-        raise NotImplementedError
+        Returns:
+            The return status::
+
+                0 -- Success
+        """
+
+        rsp = rsp_codes[0]
+        rsp['schedule_uuids'] = self.schedule.keys()
+        return rsp
+
+    def get_schedules(self, schedule_uuids, *args):
+        """
+        Grab information about a particular schedule
+
+        Args:
+            schedule_uuids (List): The UUID of the schedule to grab info for
+
+        Returns:
+            The return status::
+
+                0 -- Success
+                10 -- Schedule not found
+
+            The schedule itself, which contains::
+
+                schedule_uuid (string)
+                start_datetime (datetime)
+                cpl_uuid (string) OR playlist_uuid (string)
+        """
+
+        schedules = []
+        for schedule_uuid in schedule_uuids:
+            status = self.get_schedule(schedule_uuid)
+            if status['status'] != 0:
+                return status # Error getting the schedule
+
+            schedules.append(schedule)
+
+        rsp = rsp_codes[0]
+        rsp['schedules'] = schedules
+        return rsp
+
+    def get_schedule(self, schedule_uuid, *args):
+        """
+        Grab information about a particular schedule
+
+        Args:
+            schedule_uuid (string): The UUID of the schedule to grab info for
+
+        Returns:
+            The return status::
+
+                0 -- Success
+                10 -- Schedule not found
+
+            The schedule itself, which contains::
+
+                schedule_uuid (string)
+                start_datetime (datetime)
+                cpl_uuid (string) OR playlist_uuid (string)
+        """
+
+        if schedule_uuid not in self.schedule:
+            return rsp_codes[10]
+
+        # Clean up the schedule ready for returning to the client.
+        schedule = self.schedule[schedule_uuid]
+        if 'cpl' in schedule:
+            schedule['cpl_uuid'] = schedule['cpl'].uuid
+            del(schedule['cpl'])
+        elif 'playlist' in schedule:
+            schedule['playlist_uuid'] = schedule['playlist'].uuid
+            del(schedule['playlist'])
+
+        rsp = rsp_codes[0]
+        rsp['schedule'] = schedule
+        return rsp
 
     def schedule_cpl(self, cpl_uuid, start_datetime, *args):
         """
