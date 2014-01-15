@@ -1,140 +1,99 @@
-import json
 from uuid import uuid4
-from smpteparsers.spl import SPLParser, SPLParserError
-from screener.playback import Playback
-from screener.util import str_to_bytes, int_to_bytes
+import traceback
 
+from screener import rsp_codes
+from smpteparsers.playlist import Playlist, PlaylistValidationError
 
-class Playlist(object):
-    def __init__(self, playlist_uuid=None):
-        self._playlists = {}
-        self.spl_parser = SPLParser()
+class Playlists(object):
+    def __init__(self, content):
+        self.content = content
+        self.playlists = {}
 
-        self.load_spl(playlist_uuid)
+    def __getitem__(self, k):
+        return self.playlists[k]
 
-    def insert_spl(self, spl, *args):
+    def insert_playlist(self, playlist_contents, *args):
         """
         Saves a show playlist into memory for playback.
 
         Args:
-            spl (dict): 
+            playlist_contents (dict): Takes the dict structure used for the internal playlist representation in Screenwriter.
 
         Returns:
-            dict. The return code::
+            The return status::
 
                 0 -- Success
-                1 -- Invalid show playlist supplied
+                8 -- Invalid playlist supplied
+
+            The playlist_uuid generated for future reference. This should be stored in the client.
         """
 
         try:
-            self.spl_parser.validate(spl)
-        except SPLParserError:
-            return str_to_bytes(json.dumps({'state': 1}))
+            playlist = Playlist(playlist_contents)
+        except PlaylistValidationError as e:
+            rsp = rsp_codes[8]
+            rsp['trace'] = traceback.format_exc()
+            return rsp
 
-        playlist_uuid = str(uuid4())
-        self._playlists[playlist_uuid] = spl
+        while True:
+            playlist_uuid = str(uuid4())
 
-        return str_to_bytes(json.dumps({'playlist_uuid': playlist_uuid, 'state': 0}))
+            # Just make sure we don't overwrite an existing playlist!
+            if playlist_uuid not in self.playlists:
+                self.playlists[playlist_uuid] = playlist
+                break
 
-    def update_spl(self, playlist_uuid, spl, *args):
+        rsp = rsp_codes[0]
+        rsp['playlist_uuid'] = playlist_uuid
+        return rsp
+
+    def update_playlist(self, playlist_uuid, playlist_contents, *args):
         """
         Saves a show playlist into memory for playback.
 
         Args:
-            playlist_uuid (str): UUID of the playlist to load
-            spl (dict): 
+            playlist_uuid (string): UUID of the playlist to update
+            playlist_contents (dict): Takes the dict structure used for the internal playlist representation in Screenwriter.
 
         Returns:
-            int. The return code::
+            The return status::
 
                 0 -- Success
-                1 -- Invalid show playlist supplied
-                2 -- Show playlist not found
+                2 -- Playlist not found
+                8 -- Invalid playlist supplied
+        """
+
+        if playlist_uuid not in self.playlists:
+            return rsp_codes[2]
+
+        try:
+            playlist = Playlist(playlist_contents)
+        except PlaylistValidationError:
+            rsp = rsp_codes[8]
+            rsp['trace'] = traceback.format_exc()
+            return rsp
+
+        self.playlists[playlist_uuid] = playlist
+
+        return rsp_codes[0]
+
+    def delete_playlist(self, playlist_uuid, *args):
+        """
+        Saves a show playlist into memory for playback.
+
+        Args:
+            playlist_uuid (str): UUID of the playlist to delee
+
+        Returns:
+            The return status::
+
+                0 -- Success
+                2 -- Playlist not found
         """
 
         try:
-            self.spl_parser.validate(spl)
-        except SPLParserError:
-            return int_to_bytes(1)
-
-        try:
-            self._playlists[playlist_uuid] = spl
+            del(self.playlists[playlist_uuid])
         except KeyError:
-            return int_to_bytes(2)
+            return rsp_codes[2]
 
-        return int_to_bytes(0)
-
-    def delete_spl(self, playlist_uuid, *args):
-        """
-        Saves a show playlist into memory for playback.
-
-        Args:
-            playlist_uuid (str): UUID of the playlist to load
-
-        Returns:
-            int. The return code::
-
-                0 -- Success
-                1 -- Show playlist not found
-        """
-
-        try:
-            del(self._playlists[playlist_uuid])
-        except KeyError:
-            return int_to_bytes(1)
-
-        return int_to_bytes(0)
-
-    def load_spl(self, playlist_uuid):
-        """
-        Loads a show playlist into memory for playback.
-
-        Args:
-            playlist_uuid (str): UUID of the playlist to load
-
-        Returns:
-            int. The return code::
-
-                0 -- Success
-                1 -- Playlist not found
-        """
-
-        self.loaded_spl = self._playlists.get(playlist_uuid, None)
-
-        if self.loaded_spl is not None:
-            return int_to_bytes(0)
-
-        return int_to_bytes(1)
-
-    def status(self, *args):
-        raise NotImplementedError
-
-    def eject(self, *args):
-        """
-        Stop the playback and unload the current show playlist
-        """
-        raise NotImplementedError
-
-    def skip_forward(self, *args):
-        """
-        Skip forward to the next item in the playlist
-        """
-        raise NotImplementedError
-
-    def skip_backward(self, *args):
-        """
-        Skip backward to the next item in the playlist
-        """
-        raise NotImplementedError
-
-    def skip_to_position(self, position, *args):
-        """
-        Skip to a specific position in the playlist
-        """
-        raise NotImplementedError
-
-    def skip_to_event(self, event_id, *args):
-        """
-        Skip to a specific event in the playlist, i.e. a particular piece of content
-        """
-        raise NotImplementedError
+        return rsp_codes[0]

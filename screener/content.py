@@ -20,6 +20,9 @@ class Content(object):
         self.ingest_thread.daemon = True
         self.ingest_thread.start()
 
+    def __getitem__(self, k):
+        return self.content[k]
+
     def get_cpl_uuids(self, *args):
         """
         Returns UUIDs of all content

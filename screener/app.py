@@ -11,6 +11,7 @@ from screener.lib import config as config_handler
 from screener.util import int_to_bytes, bytes_to_str
 from screener.system import system_time
 from screener.playback import Playback
+from screener.playlist import Playlists
 from screener.content import Content
 from screener.schedule import Schedule
 
@@ -21,8 +22,9 @@ HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
 class ScreenServer(object):
     def __init__(self):
         self.content = Content()
-        self.playback = Playback()
-        self.schedule = Schedule()
+        self.playlists = Playlists(self.content)
+        self.playback = Playback(self.content, self.playlists)
+        self.schedule = Schedule(self.content, self.playlists, self.playback)
 
         self.handlers = {
                 0x00 : self.playback.play,
@@ -33,7 +35,17 @@ class ScreenServer(object):
                 0x05 : self.playback.pause,
                 0x06 : self.content.ingest,
                 0x07 : self.content.get_ingests_info,
-                0x08 : self.content.get_ingest_info
+                0x08 : self.content.get_ingest_info,
+                0x09 : self.playback.load_cpl,
+                0x10 : self.playback.load_playlist,
+                0x11 : self.playback.eject,
+                0x12 : self.playback.skip_forward,
+                0x13 : self.playback.skip_backward,
+                0x14 : self.playback.skip_to_position,
+                0x15 : self.playback.skip_to_event,
+                0x16 : self.playlists.insert_playlist,
+                0x17 : self.playlists.update_playlist,
+                0x18 : self.playlists.delete_playlist
             }
 
     def process_klv(self, msg):
