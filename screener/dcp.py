@@ -82,7 +82,6 @@ class DCPDownloader(object):
 
         to_parent_dir(self.ftp, path)
 
-        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
                 rightmost_slash = local.rfind("\\")
@@ -94,7 +93,6 @@ class DCPDownloader(object):
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
                 download_text(self.ftp, progress_tracker, local_path, local, server)
-        """
 
         """
         print "LOCAL FILE PATHS:"
@@ -162,6 +160,8 @@ def parse_dcp(local_dcp_path, local_dcp_files):
     and check hashes
     """
 
+    logging.info("Starting integrity verification...")
+
     assetmap_path = ""
     pkl_path = ""
 
@@ -169,11 +169,11 @@ def parse_dcp(local_dcp_path, local_dcp_files):
     pkl_found = False
     for filename in local_dcp_files:
         if "assetmap" in filename.lower():
-            print "Found ASSETMAP file at: {0}".format(os.path.join(local_dcp_path, filename))
+            # print "Found ASSETMAP file at: {0}".format(os.path.join(local_dcp_path, filename))
             assetmap_path = os.path.join(local_dcp_path, filename)
             assetmap_found = True
         elif "pkl.xml" in filename.lower():
-            print "Found pkl.xml file at: {0}".format(os.path.join(local_dcp_path, filename))
+            # print "Found pkl.xml file at: {0}".format(os.path.join(local_dcp_path, filename))
             pkl_path = os.path.join(local_dcp_path, filename)
             pkl_found = True
         if assetmap_found and pkl_found:
@@ -182,18 +182,22 @@ def parse_dcp(local_dcp_path, local_dcp_files):
     # get file paths from ASSETMAP FILE
     tree = ET.parse(assetmap_path)
     root = tree.getroot()
+    # ElementTree prepends the namespace to all elements, so we need to extract
+    # it so that we can perform sensible searching on elements.
     right_brace = root.tag.rfind("}")
     assetmap_ns = root.tag[1:right_brace]
     #print "Namespace: {0}".format(namespace)
     paths = []
+    # Get all file paths in the ASSETMAP file
     for elem in root.getiterator("{0}{1}{2}Path".format("{", assetmap_ns, "}")):
         # print elem.text
         paths.append(elem.text)
-    # get list of ids so we can match up entries in ASSETMAP to entries in pkl
+    # Get list of ids so we can match up entries in ASSETMAP to entries in pkl
     asset_list = root.find("{0}{1}{2}AssetList".format("{", assetmap_ns,"}"))
     assetmap_ids = []
     for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", assetmap_ns, "}")):
         assetmap_ids.append(elem.text)
+    # Create a dict mapping ids to paths that we can use later
     ids_to_paths = {}
     for assetmap_id, path in zip(assetmap_ids, paths):
         ids_to_paths[assetmap_id] = path
@@ -202,38 +206,41 @@ def parse_dcp(local_dcp_path, local_dcp_files):
     # get hashes from pkl.xml file
     tree = ET.parse(pkl_path)
     root = tree.getroot()
+    # Again, get the namespace so we can search elements
     right_brace = root.tag.rfind("}")
     pkl_ns = root.tag[1:right_brace]
+    # Get all the hashes from the pkl files
     hashes = []
     for elem in root.getiterator("{0}{1}{2}Hash".format("{", pkl_ns, "}")):
         # print elem.text
         hashes.append(elem.text)
-    # get list of ids so we can match up entries in ASSETMAP to entries in pkl
+    # Get list of ids so we can match up entries in ASSETMAP to entries in pkl
     asset_list = root.find("{0}{1}{2}AssetList".format("{", pkl_ns,"}"))
     pkl_ids = []
     for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", pkl_ns, "}")):
         pkl_ids.append(elem.text)
     ids_to_hashes = {}
+    # Create a dict mapping ids to hashes that we can use later
     for pkl_id, filehash in zip(pkl_ids, hashes):
         ids_to_hashes[pkl_id] = filehash
 
+    # Create a 'master' dict that maps ids to their respective paths and hashes,
+    # using the two dicts we created above
     ids_to_paths_hashes = {}
     for key in ids_to_hashes.keys():
         ids_to_paths_hashes[key] = (ids_to_paths[key], ids_to_hashes[key])
 
-    for key in ids_to_paths_hashes.keys():
-        print "\n{0}\n{1}\n{2}\n".format(key, ids_to_paths_hashes[key][0],
-                ids_to_paths_hashes[key][1]) 
-
-
-    """
-    for filehash in hashes:
-        local_hash 
-    """
-
-
-    # generate_hash(os.path.join(local_dcp_path, local_dcp_files[1]))
-
+    for key, value in ids_to_paths_hashes.items():
+        local_path = os.path.join(local_dcp_path, value[0])
+        local_hash = generate_hash(local_path)
+        # For each entry, check if the file exists...
+        if not os.path.isfile(local_path):
+            print "ERROR: File not found: {0}".format(local_path)
+        # and if the hash matches (don't check the hash for .mxf files)
+        if not (local_hash == value[1] or local_path[-4:] == '.mxf'):
+            print "ERROR: Hash doesn't match: {0}".format(local_path)
+    else:
+        logging.info("All files and hashes verified!")
 
 # Some util functions.
 
@@ -252,7 +259,7 @@ def generate_hash(local_path):
             file_sha1.update(chunk)
     file_hash = file_sha1.digest()
     encoded_hash = base64.b64encode(file_hash)
-    logging.info("Hash for {0}: {1}".format(local_path, encoded_hash))
+    # logging.info("Hash for {0}: {1}".format(local_path, encoded_hash))
     return encoded_hash
 
 def ensure_local_path(remote_path):
