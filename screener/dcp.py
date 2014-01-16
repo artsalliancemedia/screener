@@ -181,20 +181,50 @@ def parse_dcp(local_dcp_path, local_dcp_files):
 
     # get file paths from ASSETMAP FILE
     tree = ET.parse(assetmap_path)
+    root = tree.getroot()
+    right_brace = root.tag.rfind("}")
+    assetmap_ns = root.tag[1:right_brace]
+    #print "Namespace: {0}".format(namespace)
     paths = []
-    for elem in tree.getiterator():
-        if elem.tag[-4:] == "Path":
-            # print "{0}\t\t{1}".format(elem.tag[-4:], elem.text)
-            paths.append(elem.text)
+    for elem in root.getiterator("{0}{1}{2}Path".format("{", assetmap_ns, "}")):
+        # print elem.text
+        paths.append(elem.text)
+    # get list of ids so we can match up entries in ASSETMAP to entries in pkl
+    asset_list = root.find("{0}{1}{2}AssetList".format("{", assetmap_ns,"}"))
+    assetmap_ids = []
+    for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", assetmap_ns, "}")):
+        assetmap_ids.append(elem.text)
+    ids_to_paths = {}
+    for assetmap_id, path in zip(assetmap_ids, paths):
+        ids_to_paths[assetmap_id] = path
+
 
     # get hashes from pkl.xml file
     tree = ET.parse(pkl_path)
+    root = tree.getroot()
+    right_brace = root.tag.rfind("}")
+    pkl_ns = root.tag[1:right_brace]
     hashes = []
-    for elem in tree.getiterator():
-        if elem.tag[-4:] == "Hash":
-            # print "{0}\t\t{1}".format(elem.tag[-4:], elem.text)
-            print elem.text
-            hashes.append(elem.text)
+    for elem in root.getiterator("{0}{1}{2}Hash".format("{", pkl_ns, "}")):
+        # print elem.text
+        hashes.append(elem.text)
+    # get list of ids so we can match up entries in ASSETMAP to entries in pkl
+    asset_list = root.find("{0}{1}{2}AssetList".format("{", pkl_ns,"}"))
+    pkl_ids = []
+    for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", pkl_ns, "}")):
+        pkl_ids.append(elem.text)
+    ids_to_hashes = {}
+    for pkl_id, filehash in zip(pkl_ids, hashes):
+        ids_to_hashes[pkl_id] = filehash
+
+    ids_to_paths_hashes = {}
+    for key in ids_to_hashes.keys():
+        ids_to_paths_hashes[key] = (ids_to_paths[key], ids_to_hashes[key])
+
+    for key in ids_to_paths_hashes.keys():
+        print "\n{0}\n{1}\n{2}\n".format(key, ids_to_paths_hashes[key][0],
+                ids_to_paths_hashes[key][1]) 
+
 
     """
     for filehash in hashes:
