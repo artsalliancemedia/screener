@@ -1,6 +1,6 @@
 from screener import rsp_codes
-from smpteparsers.cpl import CPL
-from smpteparsers.playlist import Playlist
+from smpteparsers.cpl import CPL, CPLValidationError
+from smpteparsers.playlist import Playlist, PlaylistValidationError
 
 EJECT, STOP, PLAY, PAUSE = range(4)
 
@@ -34,6 +34,16 @@ class Playback(object):
         except KeyError:
             return rsp_codes[1]
 
+        # @todo: Validate loaded item, use XSD perhaps? This validation should be built into the CPL parser in smpteparsers!
+
+
+        try:
+            self.loaded_item.validate()
+        except CPLValidationError as e:
+            rsp = rsp_codes[8]
+            rsp['trace'] = traceback.format_exc()
+            return rsp
+
         status = self.stop()
         if status['status'] != 0:
             return status # Problem stopping, lets return.
@@ -52,6 +62,7 @@ class Playback(object):
 
                 0 -- Success
                 2 -- Playlist not found
+                8 -- Invalid playlist supplied
         """
         status = self.eject()
         if status['status'] != 0:
@@ -61,6 +72,13 @@ class Playback(object):
             self.loaded_item = self.playlists[playlist_uuid]
         except KeyError:
             return rsp_codes[2]
+
+        try:
+            self.loaded_item.validate()
+        except PlaylistValidationError as e:
+            rsp = rsp_codes[8]
+            rsp['trace'] = traceback.format_exc()
+            return rsp
 
         status = self.stop()
         if status['status'] != 0:
