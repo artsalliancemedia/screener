@@ -5,7 +5,7 @@ import logging
 from uuid import uuid4
 from threading import Thread
 
-from screener.util import IndexableQueue
+from screener.lib.util import IndexableQueue
 from screener import dcp
 
 class Content(object):

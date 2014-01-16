@@ -1,7 +1,6 @@
 from time import time
 
 from screener import rsp_codes
-from screener.util import int_to_bytes
 
 def system_time(*args):
     """

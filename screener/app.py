@@ -8,7 +8,7 @@ import klv
 
 from screener import cfg
 from screener.lib import config as config_handler
-from screener.util import int_to_bytes, bytes_to_str
+from screener.lib.util import int_to_bytes, bytes_to_str
 from screener.system import system_time
 from screener.playback import Playback
 from screener.playlists import Playlists
