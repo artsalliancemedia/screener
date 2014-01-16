@@ -88,18 +88,24 @@ class ScreenServer(object):
 
 
 class Screener(protocol.Protocol):
-    def __init__(self):
-        logging.info('Instantiating Screener()')
-        self.screener = ScreenServer()
+    def __init__(self, screen_server):
+        self.ss = screen_server
 
     def dataReceived(self, data):
-        return_data = self.screener.process_klv(data)
+        return_data = self.ss.process_klv(data)
         self.transport.write(str(return_data))
 
 
-class ScreenerFactory(protocol.Factory):
+class ScreenerFactory(protocol.Factory, object):
+    def __init__(self, *args, **kwargs):
+        super(ScreenerFactory, self).__init__(*args, **kwargs)
+
+        logging.info('Instantiating Screener()')
+        # We want a singleton instance of the screen server so we persist storage of assets between calls.
+        self.ss = ScreenServer()
+
     def buildProtocol(self, addr):
-        return Screener()
+        return Screener(self.ss)
 
 
 def setup_logging():
