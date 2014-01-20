@@ -2,8 +2,6 @@ from ftplib import FTP
 import os, time, logging
 from math import floor
 from datetime import datetime
-from hashlib import sha1, md5, sha224, sha256, sha384, sha512
-import base64
 try:
     import xml.etree.cElementTree as ET
 except ImportError:
@@ -13,21 +11,23 @@ import Queue
 
 from smpteparsers.dcp import DCP
 
-
 def process_ingest_queue(queue, content_store, interval=1):
     logging.info('Starting ingest queue processing thread.')
     while 1:
         if not queue.empty():
             item = queue.get()
 
-            logging.info('Downloading "{0}" from the ingest queue'.format(item['dcp_path']))
+            dcp_path = item['dcp_path']
+            logging.info('Downloading "{0}" from the ingest queue'.format(dcp_path))
             with DCPDownloader(item['ftp_details']) as dcp_downloader:
-                local_dcp_path, local_dcp_files = dcp_downloader.download(item['dcp_path'])
+                local_dcp_path = dcp_downloader.download(dcp_path)
 
             logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
             dcp = DCP(local_dcp_path)
-            parse_dcp(local_dcp_path, local_dcp_files)
 
+            # Add DCP instance to content store
+            content_store.content[dcp_path] = dcp
+            
             queue.task_done()
 
         time.sleep(interval)
@@ -59,9 +59,6 @@ class DCPDownloader(object):
         # Work out what we're dealing with, store this info on the object itself for easy access :)
         items, total_size = self.get_folder_info(self.ftp, path)
 
-#         self.ftp.cwd(path)
-        # @todo: Finish off downloading the DCP files and storing them locally.
-
         local_paths = []
         server_paths = []
 
@@ -72,16 +69,20 @@ class DCPDownloader(object):
                 }
 
         for item in items:
-            # local path stuff
             path_parts = item.split("/")
             localfilepath = "\\".join(path_parts[2:])
             local_paths.append(localfilepath)
 
-            #server path stuff
             server_paths.append(item)
 
         to_parent_dir(self.ftp, path)
 
+        """
+        Code which calls functions to download files from the ftp server.
+        This can be commented out when testing if the files have already been
+        downloaded.
+        """
+        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
                 rightmost_slash = local.rfind("\\")
@@ -93,38 +94,16 @@ class DCPDownloader(object):
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
                 download_text(self.ftp, progress_tracker, local_path, local, server)
-
-        """
-        print "LOCAL FILE PATHS:"
-        for item in items:
-            # print "{0}{1}".format(local_path, item).replace("/", "\\")
-            print item[-4:]
-            path_parts = item.split("/")
-            localfilepath = "\\".join(path_parts[2:])
-            print localfilepath
-
-        print "SERVER FILE PATHS:"
-        for item in items:
-            print item
-
-        print "DOWNLOADING TEST"
-        for item in items:
-            path_parts = item.split("/")
-            localfilepath = "\\".join(path_parts[2:])
-            serverpath = item
-            print "\ndownloading {0}\nto\n{1}\n".format(serverpath,
-                    localfilepath)
         """
 
         logging.info("Finished getting folder info.")
         
-        return local_path, local_paths
+        return local_path
 
     def get_folder_info(self, ftp, path):
         """
         Aggregate the DCP folder contents so we know what we're dealing with.
         """
-#         ftp.cwd(path)
 
         # Not particularly happy about having to do it this way (saving to the object), but it'll work for now.
         self.items = []
@@ -154,117 +133,12 @@ class DCPDownloader(object):
         
         return self.items, self.total_size
 
-def parse_dcp(local_dcp_path, local_dcp_files):
-    """
-    Establish and parse ASSETMAP and pkl files so we can verify downloads
-    and check hashes
-    """
-
-    logging.info("Starting integrity verification...")
-
-    assetmap_path = ""
-    pkl_path = ""
-
-    assetmap_found = False
-    pkl_found = False
-    for filename in local_dcp_files:
-        if "assetmap" in filename.lower():
-            # print "Found ASSETMAP file at: {0}".format(os.path.join(local_dcp_path, filename))
-            assetmap_path = os.path.join(local_dcp_path, filename)
-            assetmap_found = True
-        elif "pkl.xml" in filename.lower():
-            # print "Found pkl.xml file at: {0}".format(os.path.join(local_dcp_path, filename))
-            pkl_path = os.path.join(local_dcp_path, filename)
-            pkl_found = True
-        if assetmap_found and pkl_found:
-            break
-
-    # get file paths from ASSETMAP FILE
-    tree = ET.parse(assetmap_path)
-    root = tree.getroot()
-    # ElementTree prepends the namespace to all elements, so we need to extract
-    # it so that we can perform sensible searching on elements.
-    right_brace = root.tag.rfind("}")
-    assetmap_ns = root.tag[1:right_brace]
-    #print "Namespace: {0}".format(namespace)
-    paths = []
-    # Get all file paths in the ASSETMAP file
-    for elem in root.getiterator("{0}{1}{2}Path".format("{", assetmap_ns, "}")):
-        # print elem.text
-        paths.append(elem.text)
-    # Get list of ids so we can match up entries in ASSETMAP to entries in pkl
-    asset_list = root.find("{0}{1}{2}AssetList".format("{", assetmap_ns,"}"))
-    assetmap_ids = []
-    for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", assetmap_ns, "}")):
-        assetmap_ids.append(elem.text)
-    # Create a dict mapping ids to paths that we can use later
-    ids_to_paths = {}
-    for assetmap_id, path in zip(assetmap_ids, paths):
-        ids_to_paths[assetmap_id] = path
-
-
-    # get hashes from pkl.xml file
-    tree = ET.parse(pkl_path)
-    root = tree.getroot()
-    # Again, get the namespace so we can search elements
-    right_brace = root.tag.rfind("}")
-    pkl_ns = root.tag[1:right_brace]
-    # Get all the hashes from the pkl files
-    hashes = []
-    for elem in root.getiterator("{0}{1}{2}Hash".format("{", pkl_ns, "}")):
-        # print elem.text
-        hashes.append(elem.text)
-    # Get list of ids so we can match up entries in ASSETMAP to entries in pkl
-    asset_list = root.find("{0}{1}{2}AssetList".format("{", pkl_ns,"}"))
-    pkl_ids = []
-    for elem in asset_list.getiterator("{0}{1}{2}Id".format("{", pkl_ns, "}")):
-        pkl_ids.append(elem.text)
-    ids_to_hashes = {}
-    # Create a dict mapping ids to hashes that we can use later
-    for pkl_id, filehash in zip(pkl_ids, hashes):
-        ids_to_hashes[pkl_id] = filehash
-
-    # Create a 'master' dict that maps ids to their respective paths and hashes,
-    # using the two dicts we created above
-    ids_to_paths_hashes = {}
-    for key in ids_to_hashes.keys():
-        ids_to_paths_hashes[key] = (ids_to_paths[key], ids_to_hashes[key])
-
-    for key, value in ids_to_paths_hashes.items():
-        local_path = os.path.join(local_dcp_path, value[0])
-        local_hash = generate_hash(local_path)
-        # For each entry, check if the file exists...
-        if not os.path.isfile(local_path):
-            print "ERROR: File not found: {0}".format(local_path)
-        # and if the hash matches (don't check the hash for .mxf files)
-        if not (local_hash == value[1] or local_path[-4:] == '.mxf'):
-            print "ERROR: Hash doesn't match: {0}".format(local_path)
-    else:
-        logging.info("All files and hashes verified!")
-
 # Some util functions.
-
-def generate_hash(local_path):
-    """
-    Work out the base64 encoded sha-1 hash of the file so we can compare
-    integrity with hashes in pkl.xml file
-    """
-    chunk_size = 1048576 # 1mb
-    file_sha1 = sha1()
-    with open(r"{0}".format(local_path), "r") as f:
-        chunk = f.read(chunk_size)
-        file_sha1.update(chunk)
-        while chunk:
-            chunk = f.read(chunk_size)
-            file_sha1.update(chunk)
-    file_hash = file_sha1.digest()
-    encoded_hash = base64.b64encode(file_hash)
-    # logging.info("Hash for {0}: {1}".format(local_path, encoded_hash))
-    return encoded_hash
 
 def ensure_local_path(remote_path):
     # Just in case this is the first run, make sure we have the parent directory as well.
-    dcp_store = os.path.join(os.path.dirname(__file__), u'dcp_store') ### TODO, make dcp_store configurable
+    # TODO, make dcp_store configurable
+    dcp_store = os.path.join(os.path.dirname(__file__), u'dcp_store') 
     if not os.path.isdir(dcp_store):
         os.mkdir(dcp_store)
 
@@ -300,7 +174,6 @@ def download_text(ftp, progress_tracker, local_path, localname, servername):
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
 
-    # @todo: Emit event that download is complete
     logging.info("Download of {0} complete.".format(servername))
 
 def download_bin(ftp, progress_tracker, local_path, localname, servername):
@@ -312,13 +185,11 @@ def download_bin(ftp, progress_tracker, local_path, localname, servername):
         logging.info("Starting download: {0}".format(servername))
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
-   
 
     # Write a dummy placeholder file
     with open(os.path.join(local_path, localname), 'w') as f:
         f.write('Dummy placeholder')
 
-    # @todo: Emit event that download is complete
     logging.info("Download of {0} complete.".format(servername))
 
 def write_download(progress_tracker, f):
@@ -333,7 +204,6 @@ def write_download(progress_tracker, f):
         progress_tracker["progress"] = float(progress_tracker["downloaded"]) / progress_tracker["total_size"]
 
         if floor(100 * progress_tracker["progress"]) - floor(100 * old_progress) > 0:
-            # @todo: Emit event with progress made
             logging.info('Download progress: {0:.0%}'.format(progress_tracker["progress"]))
 
     return write_chunk

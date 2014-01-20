@@ -16,7 +16,8 @@ class Content(object):
         self.content = {}
         self.ingest_queue = IndexableQueue()
 
-        self.ingest_thread = Thread(target=dcp.process_ingest_queue, args=(self.ingest_queue, self.content), name='IngestQueue')
+        self.ingest_thread = Thread(target=dcp.process_ingest_queue,
+                args=(self.ingest_queue, self), name='IngestQueue')
         self.ingest_thread.daemon = True
         self.ingest_thread.start()
 
@@ -24,13 +25,37 @@ class Content(object):
         """
         Returns UUIDs of all content
         """
-        return self.content
+        cpl_uuids = []
+        for dcp in self.content.itervalues():
+            cpl_uuids.extend(dcp.cpls.keys())
+        
+        return cpl_uuids
 
     def get_cpls(self, cpl_uuids, *args):
-        raise NotImplementedError
+        """
+        Returns a list of CPLs
+        """
+        cpl_dict = {}
+        for dcp in self.content.itervalues():
+            for cpl_id, cpl in dcp.cpls.iteritems():
+                cpl_dict[cpl_id] = cpl
+        
+        cpls = []
+        for cpl_uuid in cpl_uuids:
+            try:
+                cpls.append(cpl_dict[cpl_uuid])
+            except KeyError:
+                logging.info("get_cpls(): key not found ({0})".format(cpl_uuid))
+        return cpls
 
     def get_cpl(self, cpl_uuid, *args):
-        raise NotImplementedError
+        """
+        Return a CPL that has an Id matching cpl_uuid
+        """
+        for dcp in self.content.itervalues():
+            for cpl_id, cpl in dcp.cpls.iteritems():
+                if cpl_id == cpl_uuid:
+                    return cpl
 
     def ingest(self, connection_details, dcp_path, *args):
         """
