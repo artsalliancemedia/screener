@@ -61,7 +61,7 @@ class Content(object):
         """
         Ingest a DCP by pulling in the content from the FTP connection details supplied and the path to the individual DCP.
         """
-        if dcp_path not in self.content:
+        if dcp_path not in self.content.keys():
             logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
             ingest_uuid = self.ingest_queue.put({'ftp_details': connection_details, 'dcp_path': dcp_path})
 
