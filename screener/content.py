@@ -43,7 +43,7 @@ class Content(object):
             logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
             ingest_uuid = self.ingest_queue.put({'ftp_details': connection_details, 'dcp_path': dcp_path})
 
-            return ingest_uuid
+            return {"ingest_uuid": ingest_uuid}
 
     def cancel_ingest(self, ingest_uuid, *args):
         del self.ingest_queue[ingest_uuid]

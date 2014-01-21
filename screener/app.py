@@ -17,7 +17,7 @@ from screener.schedule import Schedule
 
 
 # See SMPTE ST-336-2007 for details on the header format
-HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
+HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 8)
 
 class ScreenServer(object):
     def __init__(self):
@@ -81,31 +81,42 @@ class ScreenServer(object):
         decoded_val = json.loads(val) if val else {}
         result = handler(**decoded_val)
 
-        return klv.encode(HEADER, json.dumps(result))
+        return klv.encode(HEADER + [k[15]], json.dumps(result))
 
     def reset(self):
         self.__init__()
 
 
 class Screener(protocol.Protocol):
-    def __init__(self, screen_server):
+    def __init__(self, screen_server, factory):
         self.ss = screen_server
+        self.factory = factory
+
+    def connectionMade(self):
+        self.factory.clients.add(self)
+
+    def connectionLost(self, reason):
+        self.factory.clients.remove(self)
 
     def dataReceived(self, data):
         return_data = self.ss.process_klv(data)
         self.transport.write(str(return_data))
 
 
-class ScreenerFactory(protocol.Factory, object):
-    def __init__(self, *args, **kwargs):
-        super(ScreenerFactory, self).__init__(*args, **kwargs)
+class ScreenerFactory(protocol.Factory):
+    def startFactory(self):
+        self.clients = set()
 
-        logging.info('Instantiating Screener()')
+        logging.info('Instantiating ScreenServer()')
         # We want a singleton instance of the screen server so we persist storage of assets between calls.
         self.ss = ScreenServer()
 
+    def stopFactory(self):
+        for c in self.clients:
+            c.transport.loseConnection()
+
     def buildProtocol(self, addr):
-        return Screener(self.ss)
+        return Screener(self.ss, self)
 
 
 def setup_logging():

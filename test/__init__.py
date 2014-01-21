@@ -1,7 +1,7 @@
 import json
 
 import klv
-from screener.util import bytes_to_str
+from screener.lib.util import bytes_to_str
 
 def encode_msg(handler_key, **kwargs):
     '''

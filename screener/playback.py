@@ -1,5 +1,5 @@
 from screener import rsp_codes
-from smpteparsers.cpl import CPL, CPLValidationError
+from smpteparsers.cpl import CPL
 from smpteparsers.playlist import Playlist, PlaylistValidationError
 
 EJECT, STOP, PLAY, PAUSE = range(4)
