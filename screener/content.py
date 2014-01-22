@@ -5,7 +5,7 @@ import logging
 from uuid import uuid4
 from threading import Thread
 
-from screener.util import str_to_bytes, bytes_to_str, IndexableQueue
+from screener.lib.util import IndexableQueue
 from screener import dcp
 
 class Content(object):
@@ -19,6 +19,9 @@ class Content(object):
         self.ingest_thread = Thread(target=dcp.process_ingest_queue, args=(self.ingest_queue, self.content), name='IngestQueue')
         self.ingest_thread.daemon = True
         self.ingest_thread.start()
+
+    def __getitem__(self, k):
+        return self.content[k]
 
     def get_cpl_uuids(self, *args):
         """

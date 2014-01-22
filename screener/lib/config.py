@@ -6,7 +6,7 @@ import os.path
 import threading
 import logging
 
-from screener.util import synchronized
+from screener.lib.util import synchronized
 
 CONFIG_ACCESS_LOCK = threading.RLock()
 
