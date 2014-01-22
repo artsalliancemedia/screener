@@ -20,3 +20,5 @@ screener/dcp_store
 
 # config
 screener/screener.cfg
+/.project
+/.pydevproject
