@@ -7,7 +7,6 @@ dist
 
 # virtualenv files
 bin
-lib
 man
 include
 .Python

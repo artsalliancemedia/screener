@@ -1,11 +1,19 @@
-"""
-System time
-"""
 from time import time
-from util import int_to_bytes
+
+from screener import rsp_codes
 
 def system_time(*args):
     """
-    Retrieve and encode the system time in POSIX UTC format
+    Retrieve the system time
+
+    Returns:
+        The return status::
+
+            0 -- Success
+
+        Also the time in POSIX UTC format
     """
-    return int_to_bytes(int(time()))
+
+    rsp = rsp_codes[0]
+    rsp['time'] = int(time())
+    return rsp

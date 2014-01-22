@@ -5,7 +5,7 @@ import socket, json
 from datetime import datetime
 
 import klv
-from util import bytes_to_int, bytes_to_str
+from screener.lib.util import bytes_to_int, bytes_to_str
 
 
 class Comm(object):

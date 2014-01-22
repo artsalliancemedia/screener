@@ -58,3 +58,18 @@ class IndexableQueue(Queue, object):
 
         # return the uuid
         return next(qitem[0] for qitem in self.queue if qitem[1] == item)
+
+def synchronized(lock):
+    """
+    Synchronization decorator; provide thread-safe locking on a function
+    http://code.activestate.com/recipes/465057/
+    """
+    def wrap(f):
+        def synchronize(*args, **kw):
+            lock.acquire()
+            try:
+                return f(*args, **kw)
+            finally:
+                lock.release()
+        return synchronize
+    return wrap

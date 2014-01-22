@@ -6,49 +6,68 @@ import logging, json
 
 import klv
 
-import cfg
-from util import int_to_bytes, bytes_to_str
-from system import system_time
-from playback import Playback
-from content import Content
-from schedule import Schedule
+from screener import cfg
+from screener.lib import config as config_handler
+from screener.lib.util import int_to_bytes, bytes_to_str
+from screener.system import system_time
+from screener.playback import Playback
+from screener.playlists import Playlists
+from screener.content import Content
+from screener.schedule import Schedule
 
 
 # See SMPTE ST-336-2007 for details on the header format
 HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
 
-
-class Screener(protocol.Protocol):
-    def __init__(self, factory):
-        logging.info('Instantiating Screener()')
-        self.factory = factory
-
-    def dataReceived(self, data):
-        return_data = self.factory.process_klv(data)
-        self.transport.write(str(return_data))
-
-
-class ScreenerFactory(protocol.Factory):
+class ScreenServer(object):
     def __init__(self):
-        logging.info('Instantiating ScreenerFactory()')
         self.content = Content()
-        self.playback = Playback()
-        self.schedule = Schedule()
+        self.playlists = Playlists()
+        self.playback = Playback(self.content, self.playlists)
+        self.schedule = Schedule(self.content, self.playlists, self.playback)
 
+        # @todo: Work out what to do with numbering. Provisional idea is content spans 1-20, playlists 21-40 etc.
+        # @todo: Make these hex instead of decimal!!!
         self.handlers = {
+                0x29 : self.content.get_cpl_uuids,
+                0x30 : self.content.get_cpls,
+                0x31 : self.content.get_cpl,
+                0x06 : self.content.ingest,
+                0x07 : self.content.get_ingests_info,
+                0x08 : self.content.get_ingest_info,
+                0x32 : self.content.cancel_ingest,
+                0x33 : self.content.get_ingest_history,
+                0x34 : self.content.clear_ingest_history,
+
+                0x26 : self.playlists.get_playlist_uuids,
+                0x27 : self.playlists.get_playlists,
+                0x28 : self.playlists.get_playlist,
+                0x16 : self.playlists.insert_playlist,
+                0x17 : self.playlists.update_playlist,
+                0x18 : self.playlists.delete_playlist,
+
+                0x09 : self.playback.load_cpl,
+                0x10 : self.playback.load_playlist,
+                0x11 : self.playback.eject,
                 0x00 : self.playback.play,
                 0x01 : self.playback.stop,
                 0x02 : self.playback.status,
-                0x03 : system_time,
-                0x04 : self.content.get_cpl_uuids,
                 0x05 : self.playback.pause,
-                0x06 : self.content.ingest,
-                0x07 : self.content.get_ingests_info,
-                0x08 : self.content.get_ingest_info
-            }
+                0x12 : self.playback.skip_forward,
+                0x13 : self.playback.skip_backward,
+                0x14 : self.playback.skip_to_position,
+                0x15 : self.playback.skip_to_event,
 
-    def buildProtocol(self, addr):
-        return Screener(self)
+                0x19 : self.schedule.get_schedule_uuids,
+                0x20 : self.schedule.get_schedules,
+                0x21 : self.schedule.get_schedule,
+                0x22 : self.schedule.schedule_cpl,
+                0x23 : self.schedule.schedule_playlist,
+                0x24 : self.schedule.delete_schedule,
+                0x25 : self.schedule.set_mode,
+
+                0x03 : system_time
+            }
 
     def process_klv(self, msg):
         """
@@ -58,13 +77,35 @@ class ScreenerFactory(protocol.Factory):
         k, v = klv.decode(msg, 16)
         handler = self.handlers[k[15]]
 
-        decoded_val = json.loads(bytes_to_str(v))
-        result = handler(**decoded_val) or ''
+        val = bytes_to_str(v)
+        decoded_val = json.loads(val) if val else {}
+        result = handler(**decoded_val)
 
         return klv.encode(HEADER, json.dumps(result))
 
     def reset(self):
         self.__init__()
+
+
+class Screener(protocol.Protocol):
+    def __init__(self, screen_server):
+        self.ss = screen_server
+
+    def dataReceived(self, data):
+        return_data = self.ss.process_klv(data)
+        self.transport.write(str(return_data))
+
+
+class ScreenerFactory(protocol.Factory, object):
+    def __init__(self, *args, **kwargs):
+        super(ScreenerFactory, self).__init__(*args, **kwargs)
+
+        logging.info('Instantiating Screener()')
+        # We want a singleton instance of the screen server so we persist storage of assets between calls.
+        self.ss = ScreenServer()
+
+    def buildProtocol(self, addr):
+        return Screener(self.ss)
 
 
 def setup_logging():
@@ -81,10 +122,12 @@ def setup_logging():
 
 
 if __name__ == '__main__':
+    config_handler.read(cfg.config_file())
+    config_handler.save()
     setup_logging()
 
     logging.info('Setting up Screener')
-    reactor.listenTCP(cfg.screener_port, ScreenerFactory(), interface=cfg.screener_host)
+    reactor.listenTCP(cfg.screener_port(), ScreenerFactory(), interface=cfg.screener_host())
 
-    logging.info('Serving on localhost:{0}'.format(cfg.screener_port))
+    logging.info('Serving on localhost:{0}'.format(cfg.screener_port()))
     reactor.run()
