@@ -8,12 +8,15 @@ from threading import Thread
 from screener.lib.util import IndexableQueue
 from screener import dcp
 
+from lib.util import QUEUED, INGESTING, INGESTED, CANCELLED
+
 class Content(object):
 
     def __init__(self):
         logging.info('Instantiating Content()')
 
         self.content = {}
+        self.history = {}
         self.ingest_queue = IndexableQueue()
 
         self.ingest_thread = Thread(target=dcp.process_ingest_queue,
@@ -67,17 +70,29 @@ class Content(object):
         if dcp_path not in self.content.keys():
             logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
             ingest_uuid = self.ingest_queue.put({'ftp_details': connection_details, 'dcp_path': dcp_path})
+            
+            self.update_ingest_history(ingest_uuid, QUEUED)
 
             return ingest_uuid
 
+    # TODO add in response codes?
     def cancel_ingest(self, ingest_uuid, *args):
-        del self.ingest_queue[ingest_uuid]
+        # Since we're using IndexableQueue, we can't just use del x
+        self.ingest_queue.cancel(ingest_uuid)
+        self.update_ingest_history(ingest_uuid, CANCELLED)
+
+    # TODO add in response codes?
+    def update_ingest_history(self, ingest_uuid, state, *args):
+        self.history[ingest_uuid] = state
+        logging.info("Ingest state updated: {0} - {1}".format(ingest_uuid,
+            self.history[ingest_uuid]))
 
     def get_ingest_history(self, *args):
-        raise NotImplementedError
+        return self.history
 
+    # TODO add in response code?
     def clear_ingest_history(self, *args):
-        raise NotImplementedError
+        self.history = {}
 
     def get_ingests_info(self, ingest_uuids, *args):
         return [self.ingest_queue[ingest_uuid] for ingest_uuid in ingest_uuids]

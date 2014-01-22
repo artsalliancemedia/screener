@@ -90,6 +90,17 @@ class Client(object):
         rsp = self.send(0x08, ingest_uuid=ingest_uuid)
         return self.decode_rsp(rsp)
 
+    def cancel_ingest(self, ingest_uuid):
+        rsp = self.send(0x32, ingest_uuid=ingest_uuid)
+        return self.decode_rsp(rsp)
+
+    def get_ingest_history(self):
+        rsp = self.send(0x33)
+        return self.decode_rsp(rsp)
+
+    def clear_ingest_history(self):
+        rsp = self.send(0x34)
+        return self.decode_rsp(rsp)
 
 if __name__ == '__main__':
     client = Client()
@@ -113,3 +124,16 @@ if __name__ == '__main__':
     info = client.get_ingest_info(ingest_uuid)
     print u'DCP Info: ', info
 
+    """
+    info = client.cancel_ingest(ingest_uuid)
+    print u'Cancelled DCP: ', info
+
+    info = client.get_ingest_history()
+    print u'Ingest History: ', info
+
+    info = client.clear_ingest_history()
+    print u'Clear Ingest: ', info
+
+    info = client.get_ingest_history()
+    print u'Ingest History: ', info
+    """

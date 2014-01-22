@@ -11,13 +11,20 @@ import Queue
 
 from smpteparsers.dcp import DCP
 
+from lib.util import INGESTING, INGESTED, CANCELLED
+
 def process_ingest_queue(queue, content_store, interval=1):
     logging.info('Starting ingest queue processing thread.')
     while 1:
         if not queue.empty():
+
+            ingest_uuid = queue.get_ingest_uuid()
             item = queue.get()
 
             dcp_path = item['dcp_path']
+
+            content_store.update_ingest_history(ingest_uuid, INGESTING)
+
             logging.info('Downloading "{0}" from the ingest queue'.format(dcp_path))
             with DCPDownloader(item['ftp_details']) as dcp_downloader:
                 local_dcp_path = dcp_downloader.download(dcp_path)
@@ -28,6 +35,8 @@ def process_ingest_queue(queue, content_store, interval=1):
             # Add DCP instance to content store
             content_store.content[dcp_path] = dcp
             
+            content_store.update_ingest_history(ingest_uuid, INGESTED)
+
             queue.task_done()
 
         time.sleep(interval)
