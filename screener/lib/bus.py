@@ -35,8 +35,9 @@ class Bus(object):
         return key in self.subscriptions and len(self.subscriptions[key]) > 0
 
     def publish(self, key, *args, **kwargs):
-        for callback in self.subscriptions[key]:
-            callback(self, *args, **kwargs)
+        if key in self.subscriptions:
+            for callback in self.subscriptions[key]:
+                callback(self, *args, **kwargs)
 
         return self
 
