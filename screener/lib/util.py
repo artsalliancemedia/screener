@@ -58,6 +58,9 @@ class IndexableQueue(Queue, object):
     def _get(self):
         return self.queue.pop(0)[1]
 
+    def get(self):
+        return self.queue.pop(0)
+
     def put(self, item, **kwargs):
         super(IndexableQueue, self).put(item, **kwargs)
 

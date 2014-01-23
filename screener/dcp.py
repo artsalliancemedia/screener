@@ -18,15 +18,15 @@ def process_ingest_queue(queue, content_store, interval=1):
     while 1:
         if not queue.empty():
 
-            ingest_uuid = queue.get_ingest_uuid()
             item = queue.get()
+            ingest_uuid = item[0]
 
-            dcp_path = item['dcp_path']
+            dcp_path = item[1]['dcp_path']
 
             content_store.update_ingest_history(ingest_uuid, INGESTING)
 
             logging.info('Downloading "{0}" from the ingest queue'.format(dcp_path))
-            with DCPDownloader(item['ftp_details']) as dcp_downloader:
+            with DCPDownloader(item[1]['ftp_details']) as dcp_downloader:
                 local_dcp_path = dcp_downloader.download(dcp_path)
 
             logging.info('Parsing DCP "{0}"'.format(local_dcp_path))

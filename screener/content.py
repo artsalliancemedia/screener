@@ -10,6 +10,8 @@ from screener import dcp
 
 from lib.util import QUEUED, INGESTING, INGESTED, CANCELLED
 
+import datetime
+
 class Content(object):
 
     def __init__(self):
@@ -83,9 +85,10 @@ class Content(object):
 
     # TODO add in response codes?
     def update_ingest_history(self, ingest_uuid, state, *args):
-        self.history[ingest_uuid] = state
-        logging.info("Ingest state updated: {0} - {1}".format(ingest_uuid,
-            self.history[ingest_uuid]))
+        timestamp = datetime.datetime.now()
+        self.history[ingest_uuid] = (state, timestamp)
+        logging.info("Ingest state updated: {0} - {1} - {2}".format(ingest_uuid,
+            self.history[ingest_uuid][0], self.history[ingest_uuid][1]))
 
     def get_ingest_history(self, *args):
         return self.history
