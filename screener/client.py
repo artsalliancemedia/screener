@@ -6,7 +6,7 @@ from datetime import datetime
 from threading import Thread, RLock
 
 import klv
-from screener.lib.util import bytes_to_str, encode_msg, decode_rsp
+from screener.lib.util import bytes_to_str, encode_msg, decode_msg
 
 """
 Core communication methods to and from the server.
@@ -41,7 +41,7 @@ class CommMixin(object):
         val_length, ber_length = klv.decode_ber(rsp[key_len:])
         rsp += bytearray(self.s.recv(val_length - (4 - ber_length)))
 
-        return decode_rsp(rsp)
+        return decode_msg(rsp)
 
 
 class Client(CommMixin):

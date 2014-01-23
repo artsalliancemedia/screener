@@ -4,11 +4,10 @@ A DCI media server emulator
 from twisted.internet import protocol, reactor
 import logging, json
 
-import klv
-
 from screener import cfg
 from screener.lib import config as config_handler
-from screener.lib.util import int_to_bytes, bytes_to_str
+from screener.lib.util import encode_msg, decode_msg
+from screener.lib.bus import Bus
 from screener.system import system_time
 from screener.playback import Playback
 from screener.playlists import Playlists
@@ -16,11 +15,10 @@ from screener.content import Content
 from screener.schedule import Schedule
 
 
-# See SMPTE ST-336-2007 for details on the header format
-HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 8)
-
 class ScreenServer(object):
     def __init__(self):
+        self.bus = Bus()
+
         self.content = Content()
         self.playlists = Playlists()
         self.playback = Playback(self.content, self.playlists)
@@ -69,19 +67,16 @@ class ScreenServer(object):
                 0x03 : system_time
             }
 
-    def process_klv(self, msg):
+    def process_msg(self, msg):
         """
         Processes a KLV message by extracting JSON string from msg
         and passing it to the appropriate handlers
         """
-        k, v = klv.decode(msg, 16)
+        k, v = decode_msg(msg)
         handler = self.handlers[k[15]]
+        result = handler(**v) or {}
 
-        val = bytes_to_str(v)
-        decoded_val = json.loads(val) if val else {}
-        result = handler(**decoded_val)
-
-        return klv.encode(HEADER + [k[15]], json.dumps(result))
+        return k[15], result
 
     def reset(self):
         self.__init__()
@@ -90,17 +85,26 @@ class ScreenServer(object):
 class Screener(protocol.Protocol):
     def __init__(self, screen_server, factory):
         self.ss = screen_server
+
         self.factory = factory
 
     def connectionMade(self):
         self.factory.clients.add(self)
+        self.ss.bus.subscribe('to_client', self.send_rsp)
 
     def connectionLost(self, reason):
         self.factory.clients.remove(self)
+        self.ss.bus.unsubscribe('to_client', self.send_rsp)
 
     def dataReceived(self, data):
-        return_data = self.ss.process_klv(data)
-        self.transport.write(str(return_data))
+        key, return_data = self.ss.process_msg(data)
+
+        # Send acknowledgement message back straight away, this should be keyed the same as the request.
+        self.send_rsp(key, return_data)
+
+    def send_rsp(self, response_key, result):
+        encoded_data = encode_msg(response_key, **result)
+        self.transport.write(str(encoded_data))
 
 
 class ScreenerFactory(protocol.Factory):

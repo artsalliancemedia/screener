@@ -46,7 +46,7 @@ def encode_msg(handler_key, **kwargs):
 
     return msg
 
-def decode_rsp(rsp, header_len=16):
+def decode_msg(rsp, header_len=16):
     k, v = klv.decode(rsp, header_len)
     return k, json.loads(bytes_to_str(v))
 
