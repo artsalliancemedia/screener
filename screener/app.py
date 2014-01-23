@@ -67,16 +67,15 @@ class ScreenServer(object):
                 0x03 : system_time
             }
 
-    def process_msg(self, msg):
+    def process_msg(self, handler_key, **kwargs):
         """
         Processes a KLV message by extracting JSON string from msg
         and passing it to the appropriate handlers
         """
-        k, v = decode_msg(msg)
-        handler = self.handlers[k[15]]
-        result = handler(**v) or {}
+        handler = self.handlers[handler_key]
+        result = handler(**kwargs) or {}
 
-        return k[15], result
+        return handler_key, result
 
     def reset(self):
         self.__init__()
@@ -97,10 +96,11 @@ class Screener(protocol.Protocol):
         self.ss.bus.unsubscribe('to_client', self.send_rsp)
 
     def dataReceived(self, data):
-        key, return_data = self.ss.process_msg(data)
+        header, params = decode_msg(data)
+        response_key, return_data = self.ss.process_msg(header[15], params)
 
         # Send acknowledgement message back straight away, this should be keyed the same as the request.
-        self.send_rsp(key, return_data)
+        self.send_rsp(response_key, return_data)
 
     def send_rsp(self, response_key, result):
         encoded_data = encode_msg(response_key, **result)
