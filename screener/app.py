@@ -17,6 +17,7 @@ from screener.schedule import Schedule
 
 class ScreenServer(object):
     def __init__(self):
+        # Used for sending messages back to the client asynchronously from anywhere in the app.
         self.bus = Bus()
 
         self.content = Content()
@@ -96,8 +97,8 @@ class Screener(protocol.Protocol):
         self.ss.bus.unsubscribe('to_client', self.send_rsp)
 
     def dataReceived(self, data):
-        header, params = decode_msg(data)
-        response_key, return_data = self.ss.process_msg(header[15], params)
+        key, params = decode_msg(data)
+        response_key, return_data = self.ss.process_msg(key[15], params)
 
         # Send acknowledgement message back straight away, this should be keyed the same as the request.
         self.send_rsp(response_key, return_data)

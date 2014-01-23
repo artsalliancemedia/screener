@@ -46,9 +46,10 @@ def encode_msg(handler_key, **kwargs):
 
     return msg
 
-def decode_msg(rsp, header_len=16):
-    k, v = klv.decode(rsp, header_len)
-    return k, json.loads(bytes_to_str(v))
+def decode_msg(msg, header_len=16):
+    k, v = klv.decode(msg, header_len)
+    decoded_val = json.loads(bytes_to_str(v)) if v else None
+    return k, decoded_val
 
 
 class IndexableQueue(Queue, object):
