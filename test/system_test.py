@@ -9,6 +9,7 @@ class TestSystem(unittest.TestCase):
 
     def test_system_time(self):
         k,v = self.s.process_msg(0x03)
+        self.assertEqual(k, 0x3)
         self.assertEqual(v['status'], 0)
         self.assertTrue(datetime.fromtimestamp(v['time']))
 
