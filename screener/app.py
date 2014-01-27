@@ -70,8 +70,15 @@ class ScreenServer(object):
 
     def process_msg(self, handler_key, **kwargs):
         """
-        Processes a KLV message by extracting JSON string from msg
-        and passing it to the appropriate handlers
+        Processes the message passed to it by 
+
+        Args:
+            handler_key - Which operation to perform.
+            **kwargs - The arguments to pass to the called operation.
+
+        Returns:
+            handler_key - The key of the response message.
+            result - A dictionary of the data being passed back in the response.
         """
         handler = self.handlers[handler_key]
         result = handler(**kwargs) or {}
@@ -89,10 +96,14 @@ class Screener(protocol.Protocol):
         self.factory = factory
 
     def connectionMade(self):
+        # Keep track of which clients we have currently connected. (In theory only 1 but can handle more)
         self.factory.clients.add(self)
+
+        # Set up the handler for being able to send responses back to the client asynchronously.
         self.ss.bus.subscribe('to_client', self.send_rsp)
 
     def connectionLost(self, reason):
+        # Always best to clear up after yourself for each connection.
         self.factory.clients.remove(self)
         self.ss.bus.unsubscribe('to_client', self.send_rsp)
 
@@ -117,6 +128,7 @@ class ScreenerFactory(protocol.Factory):
         self.ss = ScreenServer()
 
     def stopFactory(self):
+        # Force disconnect any remaining clients, apologies.
         for c in self.clients:
             c.transport.loseConnection()
 

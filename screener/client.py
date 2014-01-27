@@ -135,6 +135,13 @@ class Content(ClientAPI, ContentResponseMixin):
 
 
 if __name__ == '__main__':
+
+    """
+    Keep the client connection going over and over for now, needs a bit of a re-think about how
+    exactly to perform client-initiated reconnections, perhaps take a look at the TMS or Courier 
+    client code to get inspiration.
+    """
+
     while True:
         try:
             client = Client(host=u'localhost', port=9500)
