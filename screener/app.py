@@ -98,7 +98,7 @@ class Screener(protocol.Protocol):
 
     def dataReceived(self, data):
         key, params = decode_msg(data)
-        response_key, return_data = self.ss.process_msg(key[15], params)
+        response_key, return_data = self.ss.process_msg(key[15], **params)
 
         # Send acknowledgement message back straight away, this should be keyed the same as the request.
         self.send_rsp(response_key, return_data)
