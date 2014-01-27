@@ -70,7 +70,7 @@ class ScreenServer(object):
 
     def process_msg(self, handler_key, **kwargs):
         """
-        Processes the message passed to it by 
+        Processes the message passed to it by the socket
 
         Args:
             handler_key - Which operation to perform.
@@ -108,6 +108,7 @@ class Screener(protocol.Protocol):
         self.ss.bus.unsubscribe('to_client', self.send_rsp)
 
     def dataReceived(self, data):
+        # Actually do the decoding in this function so we can make our tests that little bit nicer going forward.
         key, params = decode_msg(data)
         response_key, return_data = self.ss.process_msg(key[15], **params)
 
