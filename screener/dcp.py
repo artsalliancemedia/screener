@@ -32,8 +32,9 @@ def process_ingest_queue(queue, content_store, interval=1):
             logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
             dcp = DCP(local_dcp_path)
 
-            # Add DCP instance to content store
-            content_store.content[dcp_path] = dcp
+            # Add all CPLs to content store
+            for cpl in dcp.cpls.itervalues():
+                content_store.content[cpl.cpl_uuid] = cpl
             
             content_store.update_ingest_history(ingest_uuid, INGESTED)
 
@@ -147,7 +148,7 @@ class DCPDownloader(object):
 def ensure_local_path(remote_path):
     # Just in case this is the first run, make sure we have the parent directory as well.
     # TODO, make dcp_store configurable
-    dcp_store = os.path.join(os.path.dirname(__file__), u'dcp_store') 
+    dcp_store = os.path.join(os.path.dirname(__file__), u'ASSET') 
     if not os.path.isdir(dcp_store):
         os.mkdir(dcp_store)
 
@@ -170,15 +171,13 @@ def create_directories(local_path, localname):
         path += part
         path += "\\"
         if not os.path.isdir(os.path.join(local_path, path)):
-            logging.info("Making dir: {0}".format(os.path.join(local_path, path)))
+            logging.info("Creating dir: {0}".format(os.path.join(local_path, path)))
             os.mkdir(os.path.join(local_path, path))
-
 
 def download_text(ftp, progress_tracker, local_path, localname, servername):
     '''Downloads text files from an FTP to the DCP directory.
     Uses write_download to keep track of how much has been downloaded.'''
     with open(os.path.join(local_path, localname), 'w') as f:
-        # logging.info("Starting download: {0}".format(servername))
         logging.info("Starting download: {0}".format(servername))
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))

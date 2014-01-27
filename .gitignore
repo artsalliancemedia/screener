@@ -21,3 +21,5 @@ screener/dcp_store
 screener/screener.cfg
 /.project
 /.pydevproject
+/screener/ASSET
+/screener/INGEST
