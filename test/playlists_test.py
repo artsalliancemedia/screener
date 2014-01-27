@@ -9,19 +9,19 @@ success_playlist = """
     "duration": 3600,
     "events": [
         {
-            "cpl_id": ""00000000-0000-0000-0000-100000000001"
+            "cpl_id": "00000000-0000-0000-0000-100000000001",
             "type": "composition",
             "text": "Test CPL",
-            "duration_in_frames" 43200,
-            "duration_in_seconds": 1800.0,
+            "duration_in_frames": 43200,
+            "duration_in_seconds": 1800,
             "edit_rate": [24, 1]
         },
         {
-            "cpl_id": ""00000000-0000-0000-0000-100000000002"
+            "cpl_id": "00000000-0000-0000-0000-100000000002",
             "type": "composition",
             "text": "Test CPL 2",
-            "duration_in_frames" 43200,
-            "duration_in_seconds": 1800.0,
+            "duration_in_frames": 43200,
+            "duration_in_seconds": 1800,
             "edit_rate": [24, 1]
         }
     ]

@@ -39,7 +39,7 @@ class Playback(object):
 
         try:
             self.loaded_item.validate()
-        except CPLValidationError as e:
+        except CPLPlaylistValidationError as e:
             rsp = rsp_codes[8]
             rsp['trace'] = traceback.format_exc()
             return rsp
@@ -74,6 +74,7 @@ class Playback(object):
             return rsp_codes[2]
 
         try:
+            # @todo: Make this an extended validation, i.e. include whether the content/KDMs exist on the server as well as just that the playlist isn't malformed.
             self.loaded_item.validate()
         except PlaylistValidationError as e:
             rsp = rsp_codes[8]

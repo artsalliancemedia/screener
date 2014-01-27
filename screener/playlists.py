@@ -91,7 +91,7 @@ class Playlists(object):
 
         try:
             playlist = Playlist(playlist_contents)
-        except PlaylistError as e:
+        except PlaylistValidationError as e:
             rsp = rsp_codes[8]
             rsp['trace'] = traceback.format_exc()
             return rsp
@@ -129,7 +129,7 @@ class Playlists(object):
 
         try:
             playlist = Playlist(playlist_contents)
-        except PlaylistError:
+        except PlaylistValidationError:
             rsp = rsp_codes[8]
             rsp['trace'] = traceback.format_exc()
             return rsp
