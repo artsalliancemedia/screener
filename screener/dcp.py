@@ -100,13 +100,13 @@ class DCPDownloader(object):
                 print "directory_path: {0}".format(directory_path)
                 if not os.path.isdir(os.path.join(local_path, directory_path)):
                     create_directories(local_path, local)
-            if local[-4:] == '.mxf': #binary file
+            if local.endswith('.mxf'): #binary file
                 download_bin(self.ftp, progress_tracker, local_path, local, server)
             else:
                 download_text(self.ftp, progress_tracker, local_path, local, server)
-        """
 
         logging.info("Finished getting folder info.")
+        """
         
         return local_path
 

@@ -22,14 +22,19 @@ except ImportError:
     import xml.etree.ElementTree as ET
 
 def startup_cpl_scan(content_store, ingest_path):
+    """
+    Function which can be called at startup (using a separate thread) to scan
+    the local INGEST folder (if it exists) and parse any CPL files which have
+    already been downloaded.
+    """
     logging.info("Starting startup scan thread.")
-    if not os.path.isdir(ingest_path):
+    if not os.path.isdir(os.path.abspath(ingest_path)):
         return
     for root, dirs, files in os.walk(ingest_path):
         # TODO can this be done in a list comprehension (or similar)?
         for f in files:
             # Ignore binary files
-            if f[-4:] == ".mxf":
+            if f.endswith('.mxf'):
                 continue
             tree = ET.parse(os.path.join(root, f))
             if tree:
@@ -39,6 +44,7 @@ def startup_cpl_scan(content_store, ingest_path):
                     cpl_path = os.path.join(root, f)
                     cpl = CPL(cpl_path)
                     content_store.content[cpl.cpl_uuid] = cpl
+                    logging.info("Processed CPL: {0}".format(cpl.cpl_uuid))
 
 class Content(object):
 
@@ -49,10 +55,12 @@ class Content(object):
         self.history = {}
 
         # TODO Move this path to a config file
-        self.ingest_path = "C:\Users\crosie\Documents\GitHub\screener\screener\INGEST"
+        """
+        self.ingest_path = "screener\INGEST"
         self.startup_scan_thread = Thread(target=startup_cpl_scan,
                 args=(self, self.ingest_path), name="StartupScan")
         self.startup_scan_thread.start()
+        """
 
         self.ingest_queue = IndexableQueue()
 

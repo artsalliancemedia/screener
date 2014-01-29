@@ -23,3 +23,4 @@ screener/screener.cfg
 /.pydevproject
 /screener/ASSET
 /screener/INGEST
+/screener/XSDs
