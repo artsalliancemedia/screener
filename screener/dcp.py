@@ -92,7 +92,6 @@ class DCPDownloader(object):
         This can be commented out when testing if the files have already been
         downloaded.
         """
-        """
         for local, server in zip(local_paths, server_paths):
             if '\\' in local:
                 rightmost_slash = local.rfind("\\")
@@ -106,7 +105,6 @@ class DCPDownloader(object):
                 download_text(self.ftp, progress_tracker, local_path, local, server)
 
         logging.info("Finished getting folder info.")
-        """
         
         return local_path
 

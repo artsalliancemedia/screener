@@ -55,12 +55,10 @@ class Content(object):
         self.history = {}
 
         # TODO Move this path to a config file
-        """
         self.ingest_path = "screener\INGEST"
         self.startup_scan_thread = Thread(target=startup_cpl_scan,
                 args=(self, self.ingest_path), name="StartupScan")
         self.startup_scan_thread.start()
-        """
 
         self.ingest_queue = IndexableQueue()
 
