@@ -1,4 +1,4 @@
-import unittest
+import unittest, os, shutil
 from test import uuid_re
 from screener.app import ScreenServer
 
@@ -28,9 +28,19 @@ success_playlist = """
 }
 """
 
+playlists_path = os.path.join(os.path.dirname(__file__), 'PLAYLISTS')
+
 class TestPlaylistsDefaultState(unittest.TestCase):
     def setUp(self):
-        self.s = ScreenServer()
+        self.s = ScreenServer(playlists_path=playlists_path)
+
+    def tearDown(self):
+        # Manually call this so it doesn't complain about not having the playlists_path when it deletes itself going out of scope.
+        del(self.s)
+
+        # Clear up the playlists path
+        if os.path.isdir(playlists_path):
+            shutil.rmtree(playlists_path)
 
     def test_defaults(self):
         # Try to get the list of playlist_uuids
@@ -87,11 +97,19 @@ class TestPlaylistsDefaultState(unittest.TestCase):
 
 class TestPlaylistsExists(unittest.TestCase):
     def setUp(self):
-        self.s = ScreenServer()
+        self.s = ScreenServer(playlists_path=playlists_path)
 
         # Insert a playlist that we can manipulate.
         k,v = self.s.process_msg(0x16, playlist_contents=success_playlist)
         self.playlist_uuid = v['playlist_uuid']
+
+    def tearDown(self):
+        # Manually call this so it doesn't complain about not having the playlists_path when it deletes itself going out of scope.
+        del(self.s)
+
+        # Clear up the playlists path
+        if os.path.isdir(playlists_path):
+            shutil.rmtree(playlists_path)
 
     def test_update_success(self):
         # Try to update a playlist that should be successful

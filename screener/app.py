@@ -16,12 +16,12 @@ from screener.schedule import Schedule
 
 
 class ScreenServer(object):
-    def __init__(self):
+    def __init__(self, playlists_path=None):
         # Used for sending messages back to the client asynchronously from anywhere in the app.
         self.bus = Bus()
 
         self.content = Content()
-        self.playlists = Playlists()
+        self.playlists = Playlists(playlists_path = playlists_path)
         self.playback = Playback(self.content, self.playlists)
         self.schedule = Schedule(self.content, self.playlists, self.playback)
 
@@ -126,7 +126,7 @@ class ScreenerFactory(protocol.Factory):
 
         logging.info('Instantiating ScreenServer()')
         # We want a singleton instance of the screen server so we persist storage of assets between calls.
-        self.ss = ScreenServer()
+        self.ss = ScreenServer(playlists_path=cfg.playlists_path())
 
     def stopFactory(self):
         # Force disconnect any remaining clients, apologies.

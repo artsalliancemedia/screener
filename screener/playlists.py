@@ -1,12 +1,51 @@
 from uuid import uuid4
-import traceback
+import traceback, os, json
 
 from screener import rsp_codes
 from smpteparsers.playlist import Playlist, PlaylistValidationError
 
 class Playlists(object):
-    def __init__(self):
+    def __init__(self, playlists_path=None):
+        """
+        Initialises the Playlist store, reads in playlists stored on disk if the path is supplied.
+
+        Args:
+            playlists_path (string, None): The directory containing the playlist files in json format.
+        """
         self.playlists = {}
+        self.playlists_path = playlists_path
+
+        # If a playlists path is given we should read them in.
+        if self.playlists_path is not None:
+            # First ensure we have a directory to work from!
+            if not os.path.isdir(self.playlists_path):
+                os.mkdir(self.playlists_path)
+
+            # Secondly read in the files themselves.
+            for filename in os.listdir(self.playlists_path):
+                filepath = os.path.path(self.playlists_path, filename)
+                with open(filepath) as pl_file:
+                    contents = json.load(pl_file)
+                    self.playlists[filename] = Playlist(contents)
+
+    def __del__(self):
+        """
+        Save all the playlists in memory to the disk before exiting. Each playlist is stored in a separate
+        file named by the playlist UUID, it removes any old playlists first to clear out any deleted items.
+        """
+        if self.playlists_path is None:
+            return
+        else:
+            # Clear out the directory ready for the next lot, gets around deleting easily.
+            for filename in os.listdir(self.playlists_path):
+                filepath = os.path.join(self.playlists_path, filename)
+                if os.path.isfile(filepath):
+                    os.unlink(filepath)
+
+        for uuid, playlist in self.playlists.iteritems():
+            playlist_path = os.path.join(self.playlists_path, uuid)
+            with open(playlist_path, 'w') as pl_file:
+                json.dumps(str(playlist), pl_file)
 
     def __getitem__(self, k):
         return self.playlists[k]
@@ -73,7 +112,7 @@ class Playlists(object):
         rsp['playlist'] = self.playlists[playlist_uuid]
         return rsp
 
-    def insert_playlist(self, playlist_contents, *args):
+    def insert_playlist(self, playlist_contents):
         """
         Saves a show playlist into memory for playback.
 
@@ -89,6 +128,12 @@ class Playlists(object):
             The playlist_uuid generated for future reference. This should be stored in the client.
         """
 
+        # Just make sure we don't overwrite an existing playlist! Silly python not having do-while..
+        while True:
+            playlist_uuid = str(uuid4())
+            if playlist_uuid not in self.playlists:
+                break
+
         try:
             playlist = Playlist(playlist_contents)
         except PlaylistValidationError as e:
@@ -96,13 +141,7 @@ class Playlists(object):
             rsp['trace'] = traceback.format_exc()
             return rsp
 
-        while True:
-            playlist_uuid = str(uuid4())
-
-            # Just make sure we don't overwrite an existing playlist!
-            if playlist_uuid not in self.playlists:
-                self.playlists[playlist_uuid] = playlist
-                break
+        self.playlists[playlist_uuid] = playlist
 
         rsp = rsp_codes[0]
         rsp['playlist_uuid'] = playlist_uuid
@@ -143,7 +182,7 @@ class Playlists(object):
         Saves a show playlist into memory for playback.
 
         Args:
-            playlist_uuid (str): UUID of the playlist to delete
+            playlist_uuid (string): UUID of the playlist to delete
 
         Returns:
             The return status::
