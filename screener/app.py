@@ -4,11 +4,10 @@ A DCI media server emulator
 from twisted.internet import protocol, reactor
 import logging, json
 
-import klv
-
 from screener import cfg
 from screener.lib import config as config_handler
-from screener.lib.util import int_to_bytes, bytes_to_str
+from screener.lib.util import encode_msg, decode_msg
+from screener.lib.bus import Bus
 from screener.system import system_time
 from screener.playback import Playback
 from screener.playlists import Playlists
@@ -16,13 +15,13 @@ from screener.content import Content
 from screener.schedule import Schedule
 
 
-# See SMPTE ST-336-2007 for details on the header format
-HEADER = [0x06, 0x0e, 0x2b, 0x34, 0x02, 0x04, 0x01] + ([0x00] * 9)
-
 class ScreenServer(object):
-    def __init__(self):
+    def __init__(self, playlists_path=None):
+        # Used for sending messages back to the client asynchronously from anywhere in the app.
+        self.bus = Bus()
+
         self.content = Content()
-        self.playlists = Playlists()
+        self.playlists = Playlists(playlists_path = playlists_path)
         self.playback = Playback(self.content, self.playlists)
         self.schedule = Schedule(self.content, self.playlists, self.playback)
 
@@ -69,43 +68,73 @@ class ScreenServer(object):
                 0x03 : system_time
             }
 
-    def process_klv(self, msg):
+    def process_msg(self, handler_key, **kwargs):
         """
-        Processes a KLV message by extracting JSON string from msg
-        and passing it to the appropriate handlers
+        Processes the message passed to it by the socket
+
+        Args:
+            handler_key - Which operation to perform.
+            **kwargs - The arguments to pass to the called operation.
+
+        Returns:
+            handler_key - The key of the response message.
+            result - A dictionary of the data being passed back in the response.
         """
-        k, v = klv.decode(msg, 16)
-        handler = self.handlers[k[15]]
+        handler = self.handlers[handler_key]
+        result = handler(**kwargs) or {}
 
-        val = bytes_to_str(v)
-        decoded_val = json.loads(val) if val else {}
-        result = handler(**decoded_val)
-
-        return klv.encode(HEADER, json.dumps(result))
+        return handler_key, result
 
     def reset(self):
         self.__init__()
 
 
 class Screener(protocol.Protocol):
-    def __init__(self, screen_server):
+    def __init__(self, screen_server, factory):
         self.ss = screen_server
 
+        self.factory = factory
+
+    def connectionMade(self):
+        # Keep track of which clients we have currently connected. (In theory only 1 but can handle more)
+        self.factory.clients.add(self)
+
+        # Set up the handler for being able to send responses back to the client asynchronously.
+        self.ss.bus.subscribe('to_client', self.send_rsp)
+
+    def connectionLost(self, reason):
+        # Always best to clear up after yourself for each connection.
+        self.factory.clients.remove(self)
+        self.ss.bus.unsubscribe('to_client', self.send_rsp)
+
     def dataReceived(self, data):
-        return_data = self.ss.process_klv(data)
-        self.transport.write(str(return_data))
+        # Actually do the decoding in this function so we can make our tests that little bit nicer going forward.
+        key, params = decode_msg(data)
+        response_key, return_data = self.ss.process_msg(key[15], **params)
+
+        # Send acknowledgement message back straight away, this should be keyed the same as the request.
+        self.send_rsp(response_key, return_data)
+
+    def send_rsp(self, response_key, result):
+        encoded_data = encode_msg(response_key, **result)
+        self.transport.write(str(encoded_data))
 
 
-class ScreenerFactory(protocol.Factory, object):
-    def __init__(self, *args, **kwargs):
-        super(ScreenerFactory, self).__init__(*args, **kwargs)
+class ScreenerFactory(protocol.Factory):
+    def startFactory(self):
+        self.clients = set()
 
-        logging.info('Instantiating Screener()')
+        logging.info('Instantiating ScreenServer()')
         # We want a singleton instance of the screen server so we persist storage of assets between calls.
-        self.ss = ScreenServer()
+        self.ss = ScreenServer(playlists_path=cfg.playlists_path())
+
+    def stopFactory(self):
+        # Force disconnect any remaining clients, apologies.
+        for c in self.clients:
+            c.transport.loseConnection()
 
     def buildProtocol(self, addr):
-        return Screener(self.ss)
+        return Screener(self.ss, self)
 
 
 def setup_logging():

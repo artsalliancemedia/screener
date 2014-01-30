@@ -96,7 +96,7 @@ class Content(object):
             
             self.update_ingest_history(ingest_uuid, QUEUED)
 
-            return ingest_uuid
+            return {"ingest_uuid": ingest_uuid}
 
     # TODO add in response codes?
     # TODO cancel the ingest if it has already started (how?)
