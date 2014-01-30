@@ -11,7 +11,8 @@ import Queue
 
 from smpteparsers.dcp import DCP
 
-from lib.util import INGESTING, INGESTED, CANCELLED
+from lib.util import (INGESTING, INGESTED, CANCELLED, create_directories,
+    ensure_local_path)
 
 def process_ingest_queue(queue, content_store, interval=1):
     logging.info('Starting ingest queue processing thread.')
@@ -64,7 +65,7 @@ class DCPDownloader(object):
         self.ftp.quit()
 
     def download(self, path):
-        local_path = ensure_local_path(path)
+        download_folder = ensure_local_path(os.path.dirname(__file__), path)
 
         # Work out what we're dealing with, store this info on the object itself for easy access :)
         items, total_size = self.get_folder_info(self.ftp, path)
@@ -73,9 +74,9 @@ class DCPDownloader(object):
         server_paths = []
 
         progress_tracker = {
-                "downloaded" : 0,
-                "total_size" : total_size,
-                "progress" : 0
+                "downloaded": 0,
+                "total_size": total_size,
+                "progress": 0
                 }
 
         for item in items:
@@ -92,21 +93,22 @@ class DCPDownloader(object):
         This can be commented out when testing if the files have already been
         downloaded.
         """
-        for local, server in zip(local_paths, server_paths):
-            if '\\' in local:
-                rightmost_slash = local.rfind("\\")
-                directory_path = local[:rightmost_slash+1]
-                print "directory_path: {0}".format(directory_path)
-                if not os.path.isdir(os.path.join(local_path, directory_path)):
-                    create_directories(local_path, local)
-            if local.endswith('.mxf'): #binary file
-                download_bin(self.ftp, progress_tracker, local_path, local, server)
+        for local_path, server_path in zip(local_paths, server_paths):
+            dirname = os.path.dirname(local_path)
+            if dirname is not None:
+                full_download_path = os.path.join(download_folder, dirname)
+                if not os.path.isdir(full_download_path):
+                    create_directories(full_download_path)
+            if local_path.endswith('.mxf'): #binary file
+                download_bin(self.ftp, progress_tracker, download_folder, local_path,
+                        server_path)
             else:
-                download_text(self.ftp, progress_tracker, local_path, local, server)
+                download_text(self.ftp, progress_tracker, download_folder, local_path, 
+                        server_path)
 
         logging.info("Finished getting folder info.")
         
-        return local_path
+        return download_folder
 
     def get_folder_info(self, ftp, path):
         """
@@ -143,46 +145,23 @@ class DCPDownloader(object):
 
 # Some util functions.
 
-def ensure_local_path(remote_path):
-    # Just in case this is the first run, make sure we have the parent directory as well.
-    # TODO, make dcp_store configurable
-    dcp_store = os.path.join(os.path.dirname(__file__), u'ASSET') 
-    if not os.path.isdir(dcp_store):
-        os.mkdir(dcp_store)
-
-    local_path = os.path.join(dcp_store, remote_path)
-    if not os.path.isdir(local_path):
-        os.mkdir(local_path) # Ensure we have a directory to download to.
-
-    return local_path
-
 def to_parent_dir(ftp, path):
     for directory in path.split('/'):
         ftp.cwd('..') # Go back to where we started from so we don't get ourselves into a hole.
 
 # Some functions to download files from the DCP FTP
 
-def create_directories(local_path, localname):
-    parts = localname.split("\\")
-    path = ""
-    for part in parts[:-1]:
-        path += part
-        path += "\\"
-        if not os.path.isdir(os.path.join(local_path, path)):
-            logging.info("Creating dir: {0}".format(os.path.join(local_path, path)))
-            os.mkdir(os.path.join(local_path, path))
-
-def download_text(ftp, progress_tracker, local_path, localname, servername):
+def download_text(ftp, progress_tracker, folder_path, filename, servername):
     '''Downloads text files from an FTP to the DCP directory.
     Uses write_download to keep track of how much has been downloaded.'''
-    with open(os.path.join(local_path, localname), 'w') as f:
+    with open(os.path.join(folder_path, filename), 'w') as f:
         logging.info("Starting download: {0}".format(servername))
         ftp.retrbinary('RETR {0}'.format(servername),
                 write_download(progress_tracker, f))
 
     logging.info("Download of {0} complete.".format(servername))
 
-def download_bin(ftp, progress_tracker, local_path, localname, servername):
+def download_bin(ftp, progress_tracker, folder_path, filename, servername):
     '''Downloads binary files from an FTP to the DCP directory but writes them to /dev/null (or NULL on win32).
     Uses write_download to keep track of how much has been downloaded.'''
     # pipe data to /dev/null
@@ -193,7 +172,7 @@ def download_bin(ftp, progress_tracker, local_path, localname, servername):
                 write_download(progress_tracker, f))
 
     # Write a dummy placeholder file
-    with open(os.path.join(local_path, localname), 'w') as f:
+    with open(os.path.join(folder_path, filename), 'w') as f:
         f.write('Dummy placeholder')
 
     logging.info("Download of {0} complete.".format(servername))

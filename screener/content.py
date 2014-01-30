@@ -23,11 +23,10 @@ except ImportError:
 
 def startup_cpl_scan(content_store, ingest_path):
     """
-    Function which can be called at startup (using a separate thread) to scan
-    the local INGEST folder (if it exists) and parse any CPL files which have
-    already been downloaded.
+    Function which can be called at startup to scan the local INGEST 
+    folder (if it exists) and parse any CPL files which have already 
+    been downloaded.
     """
-    logging.info("Starting startup scan thread.")
     if not os.path.isdir(os.path.abspath(ingest_path)):
         return
     for root, dirs, files in os.walk(ingest_path):
@@ -36,6 +35,7 @@ def startup_cpl_scan(content_store, ingest_path):
             # Ignore binary files
             if f.endswith('.mxf'):
                 continue
+            # TODO change to use regexp?
             tree = ET.parse(os.path.join(root, f))
             if tree:
                 tree_root = tree.getroot()
@@ -56,9 +56,7 @@ class Content(object):
 
         # TODO Move this path to a config file
         self.ingest_path = "screener\INGEST"
-        self.startup_scan_thread = Thread(target=startup_cpl_scan,
-                args=(self, self.ingest_path), name="StartupScan")
-        self.startup_scan_thread.start()
+        # startup_cpl_scan(self, self.ingest_path)
 
         self.ingest_queue = IndexableQueue()
 
@@ -92,10 +90,6 @@ class Content(object):
         """
         Ingest a DCP by pulling in the content from the FTP connection details supplied and the path to the individual DCP.
         """
-        # TODO this is no longer technically correct since we now store cpls in
-        # self.content, not dcps
-        # How do we check if a dcp has already been ingested? Scan folders for
-        # dcp_path?
         if dcp_path not in self.content.keys():
             logging.info('Adding DCP "{dcp_path}" to the ingest queue'.format(dcp_path=dcp_path))
             ingest_uuid = self.ingest_queue.put({'ftp_details': connection_details, 'dcp_path': dcp_path})
@@ -114,9 +108,13 @@ class Content(object):
     # TODO add in response codes?
     def update_ingest_history(self, ingest_uuid, state, *args):
         timestamp = datetime.datetime.now()
-        self.history[ingest_uuid] = (state, timestamp)
+        
+        if ingest_uuid not in self.history:
+            self.history[ingest_uuid] = []
+
+        self.history[ingest_uuid].append({"timestamp": timestamp, "state": state})
         logging.info("Ingest state updated: {0} - {1} - {2}".format(ingest_uuid,
-            self.history[ingest_uuid][0], self.history[ingest_uuid][1]))
+            state, timestamp))
 
     def get_ingest_history(self, *args):
         return self.history
@@ -130,3 +128,11 @@ class Content(object):
 
     def get_ingest_info(self, ingest_uuid, *args):
         return self.ingest_queue[ingest_uuid]
+
+    """
+    TODO Currently we don't store a link between the ingest uuid returned by
+    the IndexableQueue and a cpl. Will need to create this relationship before
+    we can delete ingests.
+    """
+    def delete_ingest(self, ingest_uuid, *args):
+        raise NotImplementedError
