@@ -6,6 +6,10 @@ from struct import pack, unpack
 from Queue import Queue
 from uuid import uuid4
 
+import os
+
+QUEUED, INGESTING, INGESTED, CANCELLED = range(4)
+
 def int_to_bytes(num):
     """
     Transforms an unsigned int a big endian byte array
@@ -30,6 +34,24 @@ def bytes_to_str(bytes):
     """
     return str(bytes)
 
+def create_directories(full_path):
+    try:
+        os.makedirs(full_path)
+    except WindowsError:
+        pass
+
+def ensure_local_path(local_path, remote_path):
+    # Just in case this is the first run, make sure we have the parent directory as well.
+    # TODO, make dcp_store configurable
+    dcp_store = os.path.join(local_path, u'ASSET') 
+    if not os.path.isdir(dcp_store):
+        os.mkdir(dcp_store)
+
+    local_path = os.path.join(dcp_store, remote_path)
+    if not os.path.isdir(local_path):
+        os.mkdir(local_path) # Ensure we have a directory to download to.
+
+    return local_path
 
 class IndexableQueue(Queue, object):
     '''
@@ -42,7 +64,10 @@ class IndexableQueue(Queue, object):
     '''
     def __getitem__(self, uuid):
         with self.mutex:
-            return next(item[1] for item in self.queue if item[0] == uuid)
+            try:
+                return next(item[1] for item in self.queue if item[0] == uuid)
+            except StopIteration:
+                return None
 
     def _init(self, maxsize):
         self.queue = []
@@ -53,11 +78,20 @@ class IndexableQueue(Queue, object):
     def _get(self):
         return self.queue.pop(0)[1]
 
+    def get(self):
+        return self.queue.pop(0)
+
     def put(self, item, **kwargs):
         super(IndexableQueue, self).put(item, **kwargs)
 
         # return the uuid
         return next(qitem[0] for qitem in self.queue if qitem[1] == item)
+
+    def get_ingest_uuid(self):
+        return self.queue[0][0]
+
+    def cancel(self, uuid):
+        self.queue = [qitem for qitem in self.queue if qitem[0] != uuid]
 
 def synchronized(lock):
     """

@@ -90,12 +90,28 @@ class Client(object):
         rsp = self.send(0x08, ingest_uuid=ingest_uuid)
         return self.decode_rsp(rsp)
 
+    def cancel_ingest(self, ingest_uuid):
+        rsp = self.send(0x32, ingest_uuid=ingest_uuid)
+        return self.decode_rsp(rsp)
+
+    def get_ingest_history(self):
+        rsp = self.send(0x33)
+        return self.decode_rsp(rsp)
+
+    def clear_ingest_history(self):
+        rsp = self.send(0x34)
+        return self.decode_rsp(rsp)
 
 if __name__ == '__main__':
     client = Client()
 
-    connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd": "pullingest"}
+    #CR 13/01 14:40 added 'mode' arg
+    connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd":
+	    "pullingest", "mode": "active"}
     dcp_path = '0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a'
+    # dcp_path = '010ab1b1-8ef7-9440-b2f7-a47ea84ee010'
+#     dcp_path = 'ef32ddd6-80ee-4f85-93b9-449230804b0b'
+#     dcp_path = '0b56b850-eda7-441e-bc20-d48062e5b2f3'
     # 0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a # With sub-folder
     # 00a2c129-891d-4fec-a567-01ddc335452d # Without sub-folder.
 
@@ -108,3 +124,16 @@ if __name__ == '__main__':
     info = client.get_ingest_info(ingest_uuid)
     print u'DCP Info: ', info
 
+    """
+    info = client.cancel_ingest(ingest_uuid)
+    print u'Cancelled DCP: ', info
+
+    info = client.get_ingest_history()
+    print u'Ingest History: ', info
+
+    info = client.clear_ingest_history()
+    print u'Clear Ingest: ', info
+
+    info = client.get_ingest_history()
+    print u'Ingest History: ', info
+    """

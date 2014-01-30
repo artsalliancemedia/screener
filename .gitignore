@@ -19,3 +19,8 @@ screener/dcp_store
 
 # config
 screener/screener.cfg
+/.project
+/.pydevproject
+/screener/ASSET
+/screener/INGEST
+/screener/XSDs
