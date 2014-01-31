@@ -1,51 +1,16 @@
 from ftplib import FTP
-import os, time, logging
 from math import floor
 from datetime import datetime
-try:
-    import xml.etree.cElementTree as ET
-except ImportError:
-    import xml.etree.ElementTree as ET
+import Queue, shutil, os, logging
 
-import Queue
-
-from smpteparsers.dcp import DCP
-
-from lib.util import (INGESTING, INGESTED, CANCELLED, create_directories,
-    ensure_local_path)
-
-def process_ingest_queue(queue, content_store, interval=1):
-    logging.info('Starting ingest queue processing thread.')
-    while 1:
-        if not queue.empty():
-
-            item = queue.get()
-            ingest_uuid = item[0]
-
-            dcp_path = item[1]['dcp_path']
-
-            content_store.update_ingest_history(ingest_uuid, INGESTING)
-
-            logging.info('Downloading "{0}" from the ingest queue'.format(dcp_path))
-            with DCPDownloader(item[1]['ftp_details']) as dcp_downloader:
-                local_dcp_path = dcp_downloader.download(dcp_path)
-
-            logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
-            dcp = DCP(local_dcp_path)
-
-            # Add all CPLs to content store
-            for cpl in dcp.cpls.itervalues():
-                content_store.content[cpl.cpl_uuid] = cpl
-            
-            content_store.update_ingest_history(ingest_uuid, INGESTED)
-
-            queue.task_done()
-
-        time.sleep(interval)
+from screener.lib.util import ensure_path, create_hard_link
 
 class DCPDownloader(object):
-    def __init__(self, ftp_details):
+    def __init__(self, incoming_path, ftp_details):
+        self.incoming_path = incoming_path
         self.ftp_details = ftp_details
+
+        ensure_path(self.incoming_path)
 
     def __enter__(self):
         logging.info('Connecting to FTP')
@@ -65,7 +30,8 @@ class DCPDownloader(object):
         self.ftp.quit()
 
     def download(self, path):
-        download_folder = ensure_local_path(os.path.dirname(__file__), path)
+        download_path = os.path.join(self.incoming_path, path)
+        ensure_path(download_path)
 
         # Work out what we're dealing with, store this info on the object itself for easy access :)
         items, total_size = self.get_folder_info(self.ftp, path)
@@ -74,10 +40,10 @@ class DCPDownloader(object):
         server_paths = []
 
         progress_tracker = {
-                "downloaded": 0,
-                "total_size": total_size,
-                "progress": 0
-                }
+            "downloaded": 0,
+            "total_size": total_size,
+            "progress": 0
+        }
 
         for item in items:
             path_parts = item.split("/")
@@ -90,25 +56,23 @@ class DCPDownloader(object):
 
         """
         Code which calls functions to download files from the ftp server.
-        This can be commented out when testing if the files have already been
-        downloaded.
+        This can be commented out when testing if the files have already been downloaded.
         """
         for local_path, server_path in zip(local_paths, server_paths):
             dirname = os.path.dirname(local_path)
             if dirname is not None:
-                full_download_path = os.path.join(download_folder, dirname)
+                full_download_path = os.path.join(download_path, dirname)
                 if not os.path.isdir(full_download_path):
                     create_directories(full_download_path)
-            if local_path.endswith('.mxf'): #binary file
-                download_bin(self.ftp, progress_tracker, download_folder, local_path,
-                        server_path)
+
+            if local_path.endswith('.mxf'): # binary file
+                download_bin(self.ftp, progress_tracker, download_path, local_path, server_path)
             else:
-                download_text(self.ftp, progress_tracker, download_folder, local_path, 
-                        server_path)
+                download_text(self.ftp, progress_tracker, download_path, local_path, server_path)
 
         logging.info("Finished getting folder info.")
         
-        return download_folder
+        return download_path
 
     def get_folder_info(self, ftp, path):
         """
@@ -126,8 +90,7 @@ class DCPDownloader(object):
             if parts[0][0] == 'd': # Checks the permission signature :)
                 queue.put(parts[8])
             else:
-                self.items.append("{path}{filename}".format(path=current_path,
-                    filename=parts[8]))
+                self.items.append("{path}{filename}".format(path=current_path, filename=parts[8]))
                 self.total_size += int(parts[4])
 
         queue.put(path)
@@ -135,8 +98,7 @@ class DCPDownloader(object):
         while not queue.empty():
             p = queue.get()
             ftp.cwd(p)
-            current_path = "{directory}{slash}".format(directory=ftp.pwd(),
-                    slash="/")
+            current_path = "{directory}{slash}".format(directory=ftp.pwd(), slash="/")
             ftp.retrlines('LIST', process_line)
             
         to_parent_dir(ftp, path)
@@ -156,8 +118,7 @@ def download_text(ftp, progress_tracker, folder_path, filename, servername):
     Uses write_download to keep track of how much has been downloaded.'''
     with open(os.path.join(folder_path, filename), 'w') as f:
         logging.info("Starting download: {0}".format(servername))
-        ftp.retrbinary('RETR {0}'.format(servername),
-                write_download(progress_tracker, f))
+        ftp.retrbinary('RETR {0}'.format(servername), write_download(progress_tracker, f))
 
     logging.info("Download of {0} complete.".format(servername))
 
@@ -168,8 +129,7 @@ def download_bin(ftp, progress_tracker, folder_path, filename, servername):
     
     with open(os.devnull, 'wb') as f:
         logging.info("Starting download: {0}".format(servername))
-        ftp.retrbinary('RETR {0}'.format(servername),
-                write_download(progress_tracker, f))
+        ftp.retrbinary('RETR {0}'.format(servername), write_download(progress_tracker, f))
 
     # Write a dummy placeholder file
     with open(os.path.join(folder_path, filename), 'w') as f:
@@ -192,3 +152,50 @@ def write_download(progress_tracker, f):
             logging.info('Download progress: {0:.0%}'.format(progress_tracker["progress"]))
 
     return write_chunk
+
+def repackage_dcp(dcp, assets_path, ingest_path):
+    cpl_dcp_paths = []
+
+    for uuid, cpl in dcp.cpls.iteritems():
+
+        # First off make sure we have a folder to add in the hard links to.
+        cpl_ingest_path = os.path.join(ingest_path, uuid)
+        ensure_path(cpl_ingest_path)
+
+        # Add the ingested path for re-parsing later.
+        cpl_dcp_paths.append(cpl_ingest_path)
+
+        for asset_uuid, asset in cpl.assets.iteritems():
+            # Store each asset, named as it's uuid in the assets_path directory.
+            asset_storage_path = os.path.join(assets_path, asset_uuid, '.mxf')
+            if not os.isfile(asset_storage_path):
+                os.rename(asset.path, asset_storage_path)
+            else:
+                # Already this file there, remove the temporary copy!
+                os.unlink(asset.path)
+
+            # Finally add in the hard links.
+            asset_link_path = os.path.join(ingest_path, asset_uuid, '.mxf')
+            create_hard_link(asset_link_path, asset_storage_path)
+
+            # Write the new path to the assetmap ready for repackaging it later.
+            dcp.assetmap[asset_uuid].path = os.path.join(asset_uuid, '.mxf')
+
+        # We have all the picture/sound/subtitle assets linked up, not onto the metadata
+        os.rename(cpl.path, os.path.join(cpl_ingest_path, 'cpl.xml'))
+        dcp.assetmap[cpl.id].path = 'cpl.xml'
+
+        shutil.copyfile(dcp.pkl.path, os.path.join(cpl_ingest_path, 'pkl.xml'))
+        dcp.assetmap[dcp.pkl.id] = 'pkl.xml'
+
+        # VOLINDEX
+
+        # Finally repackage the assetmap with the new file paths and write it in the new place.
+        repackaged_assetmap_path = os.path.join(cpl_ingest_path, 'assetmap.xml')
+        with open(repackaged_assetmap_path, 'w') as f:
+            f.write(unicode(dcp.assetmap))
+
+    # Finally clean up the incoming DCP path.
+    os.unlink(dcp.path)
+
+    return cpl_dcp_paths

@@ -5,11 +5,8 @@ Utility functions
 from struct import pack, unpack
 from Queue import Queue
 from uuid import uuid4
-import json, klv
+import json, klv, os, sys
 
-import os
-
-QUEUED, INGESTING, INGESTED, CANCELLED = range(4)
 
 def int_to_bytes(num):
     """
@@ -34,25 +31,6 @@ def bytes_to_str(bytes):
     Transforms a byte array into a string
     """
     return str(bytes)
-
-def create_directories(full_path):
-    try:
-        os.makedirs(full_path)
-    except WindowsError:
-        pass
-
-def ensure_local_path(local_path, remote_path):
-    # Just in case this is the first run, make sure we have the parent directory as well.
-    # TODO, make dcp_store configurable
-    dcp_store = os.path.join(local_path, u'ASSET') 
-    if not os.path.isdir(dcp_store):
-        os.mkdir(dcp_store)
-
-    local_path = os.path.join(dcp_store, remote_path)
-    if not os.path.isdir(local_path):
-        os.mkdir(local_path) # Ensure we have a directory to download to.
-
-    return local_path
 
 def encode_msg(handler_key, **kwargs):
     '''
@@ -108,9 +86,6 @@ class IndexableQueue(Queue, object):
         # return the uuid
         return next(qitem[0] for qitem in self.queue if qitem[1] == item)
 
-    def get_ingest_uuid(self):
-        return self.queue[0][0]
-
     def cancel(self, uuid):
         self.queue = [qitem for qitem in self.queue if qitem[0] != uuid]
 
@@ -128,3 +103,59 @@ def synchronized(lock):
                 lock.release()
         return synchronize
     return wrap
+
+
+def create_directories(file_path):
+    """
+    Create the parent directories required for a file if they do not exist.
+    os.makedirs() will throw a WindowsError if the folder path already exists
+    (which is ok, so we just catch it silently)
+    """
+    abs_path = os.path.abspath(file_path)
+
+    try:
+        os.makedirs(abs_path)
+    except WindowsError: 
+        pass
+
+    return abs_path
+
+def ensure_path(path):
+    if not os.path.isdir(path):
+        os.mkdir(path) # Ensure we have a directory here.
+
+def create_hard_link(hard_link_to, source_file):
+    """
+    Create a hardlink to a file. Should work on both Windows and Unix.
+    """
+
+    if sys.platform == 'win32':
+        create_directories(os.path.dirname(hard_link_to))
+
+        from ctypes import windll
+        from ctypes.wintypes import BOOLEAN, LPWSTR, DWORD, LPVOID
+        CreateHardLink = windll.kernel32.CreateHardLinkW
+        CreateHardLink.argtypes = (LPWSTR, LPWSTR, LPVOID,)
+        CreateHardLink.restype = BOOLEAN
+        GetLastError = windll.kernel32.GetLastError
+        GetLastError.argtypes = ()
+        GetLastError.restype = DWORD
+
+        error_dict = {
+                0: 'The operation completed successfully',
+                2: 'The system cannot find the file specified',
+                3: 'The system cannot find the path specified',
+                183: 'Cannot create a file when that file already exists',
+                1142: 'An attempt was made to create more links on a file than the file system supports'
+        }
+
+        if not CreateHardLink(hard_link_to, source_file, None):
+            error_key = GetLastError()
+            if error_key in error_dict:
+                error = error_dict[error_key]
+            else:
+                error = 'ErrorKey[%s] not in Error_dict, goto http http://msdn.microsoft.com/en-us/library/ms681382(VS.85).aspx for description '% error_key
+            error = error + '|| to: |' + str(hard_link_to) + '| source: |' + str(source_file) + '|'
+            raise Exception(error)
+    else:
+        os.link(source_file, hard_link_to)
