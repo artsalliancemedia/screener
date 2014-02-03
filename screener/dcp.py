@@ -199,7 +199,7 @@ def repackage_dcp(dcp, assets_path, ingest_path):
                 create_hard_link(asset_link_path, asset_storage_path)
 
             # Write the new path to the assetmap ready for repackaging it later.
-            dcp.assetmap[asset_uuid].path = os.path.join(asset_uuid, '.mxf')
+            dcp.assetmap[asset_uuid].path = os.path.join('{0}.mxf'.format(asset_uuid))
 
         # We have all the picture/sound/subtitle assets linked up, not onto the metadata
         os.rename(cpl.path, os.path.join(cpl_ingest_path, 'cpl.xml'))
