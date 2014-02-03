@@ -2,9 +2,10 @@ from uuid import uuid4
 from threading import Thread, RLock
 import datetime, os, logging, time
 
-from screener.lib.util import IndexableQueue, ensure_path
+from screener.lib.util import IndexableQueue, create_dirs
 from screener.dcp import DCPDownloader, repackage_dcp
 from screener import rsp_codes
+from smpteparsers.dcp import DCP
 
 QUEUED, INGESTING, INGESTED, CANCELLED = range(4)
 
@@ -20,13 +21,13 @@ class Content(object):
         self.ingest_history_lock = RLock()
 
         self.incoming_path = incoming_path
-        ensure_path(self.incoming_path)
+        create_dirs(self.incoming_path)
 
         self.assets_path = assets_path
-        ensure_path(self.assets_path)
+        create_dirs(self.assets_path)
 
         self.ingest_path = ingest_path
-        ensure_path(self.ingest_path)
+        create_dirs(self.ingest_path)
 
         self.ingest_queue = IndexableQueue()
         self.ingest_thread = Thread(target=self.process_ingests, name='ProcessIngests')
@@ -52,7 +53,7 @@ class Content(object):
                 self.update_ingest_history(ingest_uuid, INGESTING)
 
                 logging.info('Downloading "{0}" from the ingest queue'.format(item['dcp_path']))
-                with DCPDownloader(item['ftp_details']) as dcp_downloader:
+                with DCPDownloader(self.incoming_path, item['ftp_details']) as dcp_downloader:
                     local_dcp_path = dcp_downloader.download(item['dcp_path'])
 
                 logging.info('Parsing DCP "{0}"'.format(local_dcp_path))
@@ -78,7 +79,7 @@ class Content(object):
 
             time.sleep(interval)
 
-    def update_ingest_history(ingest_uuid, state):
+    def update_ingest_history(self, ingest_uuid, state):
         with self.ingest_history_lock:
             if ingest_uuid not in self.ingest_history:
                 self.ingest_history[ingest_uuid] = []
@@ -171,7 +172,7 @@ class Content(object):
             'dcp_path': dcp_path
         })
         
-        update_ingest_history(self.ingest_history, self.ingest_history_lock, ingest_uuid, QUEUED)
+        self.update_ingest_history(ingest_uuid, QUEUED)
 
         rsp = rsp_codes[0]
         rsp["ingest_uuid"] = ingest_uuid

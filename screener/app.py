@@ -28,7 +28,7 @@ class ScreenServer(object):
         # @todo: Work out what to do with numbering. Provisional idea is content spans 1-20, playlists 21-40 etc.
         # @todo: Make these hex instead of decimal!!!
         self.handlers = {
-                0x29 : self.content.get_cpl_uuids,
+                0x04 : self.content.get_cpl_uuids,
                 0x30 : self.content.get_cpls,
                 0x31 : self.content.get_cpl,
                 0x06 : self.content.ingest,
@@ -80,6 +80,7 @@ class ScreenServer(object):
             handler_key - The key of the response message.
             result - A dictionary of the data being passed back in the response.
         """
+        print "key: ", handler_key
         handler = self.handlers[handler_key]
         result = handler(**kwargs) or {}
 

@@ -59,6 +59,7 @@ class Client(CommMixin):
         self.system = System(self)
 
         self.rsp_handlers = {
+            0x04: self.content.get_cpl_uuids_rsp,
             0x06: self.content.ingest_rsp,
             0x07: self.content.get_ingests_info_rsp,
             0x08: self.content.get_ingest_info_rsp
@@ -81,6 +82,10 @@ Potenital Response Messages
 """
 
 class ContentResponseMixin(object):
+    def get_cpl_uuids_rsp(self, cpl_uuids, *args, **kwargs):
+        with self.c.out_lock:
+            print u'CPLs on the server: {0}'.format(cpl_uuids)
+
     def ingest_rsp(self, ingest_uuid, *args, **kwargs):
         with self.c.out_lock:
             print u'Ingesting DCP... Queue UUID: "{ingest_uuid}"'.format(ingest_uuid=ingest_uuid)
@@ -120,7 +125,7 @@ class System(ClientAPI):
         self.c.send_msg(0x03)
 
 class Content(ClientAPI, ContentResponseMixin):
-    def content_uuids(self):
+    def get_cpl_uuids(self):
         self.c.send_msg(0x04)
 
     def ingest(self, connection_details, dcp_path):
@@ -146,41 +151,30 @@ class Content(ClientAPI, ContentResponseMixin):
         return self.decode_rsp(rsp)
 
 if __name__ == '__main__':
+    try:
+        client = Client(host=u'localhost', port=9500)
 
-    #CR 13/01 14:40 added 'mode' arg
-    connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd":
-	    "pullingest", "mode": "active"}
-    dcp_path = '0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a'
-    # dcp_path = '010ab1b1-8ef7-9440-b2f7-a47ea84ee010'
-#     dcp_path = 'ef32ddd6-80ee-4f85-93b9-449230804b0b'
-#     dcp_path = '0b56b850-eda7-441e-bc20-d48062e5b2f3'
-    # 0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a # With sub-folder
-    # 00a2c129-891d-4fec-a567-01ddc335452d # Without sub-folder.
+        client.content.get_cpl_uuids()
 
-    while True:
-        try:
-            client = Client(host=u'localhost', port=9500)
+        with client.out_lock:
+            print "Beginning to ingest"
 
-            connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd": "pullingest"}
-            dcp_path = '0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a'
-            # 0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a # With sub-folder
-            # 00a2c129-891d-4fec-a567-01ddc335452d # Without sub-folder.
+        connection_details = {"host": "10.58.4.8", "port": 21, "user": "pullingest", "passwd": "pullingest", "mode": "active"}
+        dcp_path = '0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a'
+        # 0bb2e1a7-d5fd-49dd-b480-8f4deb61e82a # With sub-folder
+        # 00a2c129-891d-4fec-a567-01ddc335452d # Without sub-folder.
+        client.content.ingest(connection_details, dcp_path)
 
-            with client.out_lock:
-                print "Beginning to ingest"
+        with client.out_lock:
+            print "Ingest call complete, await a response I guess"
 
-            client.content.ingest(connection_details, dcp_path)
+        time.sleep(10)
 
-            with client.out_lock:
-                print "Ingest call complete, await a response I guess"
-
-            time.sleep(10)
-
-        except socket.error as e:
-            print "Socket Error: \n"
-            print traceback.format_exc()
-            print "Reconnecting in 2 seconds..."
-            time.sleep(2)
-        finally:
-            client.close()
+    except socket.error as e:
+        print "Socket Error: \n"
+        print traceback.format_exc()
+        print "Reconnecting in 2 seconds..."
+        time.sleep(2)
+    finally:
+        client.close()
 

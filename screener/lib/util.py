@@ -48,7 +48,7 @@ def encode_msg(handler_key, **kwargs):
 
 def decode_msg(msg, header_len=16):
     k, v = klv.decode(msg, header_len)
-    decoded_val = json.loads(bytes_to_str(v)) if v else None
+    decoded_val = json.loads(bytes_to_str(v)) if v else {}
     return k, decoded_val
 
 
@@ -105,24 +105,19 @@ def synchronized(lock):
     return wrap
 
 
-def create_directories(file_path):
+def create_dirs(file_path):
     """
     Create the parent directories required for a file if they do not exist.
-    os.makedirs() will throw a WindowsError if the folder path already exists
-    (which is ok, so we just catch it silently)
     """
     abs_path = os.path.abspath(file_path)
 
     try:
         os.makedirs(abs_path)
-    except WindowsError: 
+    except OSError:
+        # Throws to here if the folder already exists, therefore we have no work to do :)
         pass
 
     return abs_path
-
-def ensure_path(path):
-    if not os.path.isdir(path):
-        os.mkdir(path) # Ensure we have a directory here.
 
 def create_hard_link(hard_link_to, source_file):
     """
@@ -130,26 +125,27 @@ def create_hard_link(hard_link_to, source_file):
     """
 
     if sys.platform == 'win32':
-        create_directories(os.path.dirname(hard_link_to))
+        create_dirs(os.path.dirname(hard_link_to))
 
         from ctypes import windll
         from ctypes.wintypes import BOOLEAN, LPWSTR, DWORD, LPVOID
         CreateHardLink = windll.kernel32.CreateHardLinkW
         CreateHardLink.argtypes = (LPWSTR, LPWSTR, LPVOID,)
         CreateHardLink.restype = BOOLEAN
-        GetLastError = windll.kernel32.GetLastError
-        GetLastError.argtypes = ()
-        GetLastError.restype = DWORD
-
-        error_dict = {
-                0: 'The operation completed successfully',
-                2: 'The system cannot find the file specified',
-                3: 'The system cannot find the path specified',
-                183: 'Cannot create a file when that file already exists',
-                1142: 'An attempt was made to create more links on a file than the file system supports'
-        }
 
         if not CreateHardLink(hard_link_to, source_file, None):
+            GetLastError = windll.kernel32.GetLastError
+            GetLastError.argtypes = ()
+            GetLastError.restype = DWORD
+
+            error_dict = {
+                    0: 'The operation completed successfully',
+                    2: 'The system cannot find the file specified',
+                    3: 'The system cannot find the path specified',
+                    183: 'Cannot create a file when that file already exists',
+                    1142: 'An attempt was made to create more links on a file than the file system supports'
+            }
+
             error_key = GetLastError()
             if error_key in error_dict:
                 error = error_dict[error_key]
