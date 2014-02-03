@@ -23,7 +23,7 @@ class Playlists(object):
 
             # Secondly read in the files themselves.
             for filename in os.listdir(self.playlists_path):
-                filepath = os.path.path(self.playlists_path, filename)
+                filepath = os.path.join(self.playlists_path, filename)
                 with open(filepath) as pl_file:
                     contents = json.load(pl_file)
                     self.playlists[filename] = Playlist(contents)
