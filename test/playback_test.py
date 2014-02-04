@@ -3,37 +3,23 @@ from screener.app import ScreenServer
 from screener.lib import config as config_handler
 from screener import cfg
 
-incoming_path = os.path.join(os.path.dirname(__file__), 'INCOMING')
-assets_path = os.path.join(os.path.dirname(__file__), 'ASSET')
-ingest_path = os.path.join(os.path.dirname(__file__), 'INGEST')
-playlists_path = os.path.join(os.path.dirname(__file__), 'PLAYLISTS')
+paths = {
+    'incoming': os.path.join(os.path.dirname(__file__), 'INCOMING'),
+    'assets': os.path.join(os.path.dirname(__file__), 'ASSET'),
+    'ingest': os.path.join(os.path.dirname(__file__), 'INGEST'),
+    'playlists': os.path.join(os.path.dirname(__file__), 'PLAYLISTS')
+}
 
 class TestPlaybackNoContentLoaded(unittest.TestCase):
     def setUp(self):
-        paths = {
-            "incoming": incoming_path,
-            "assets": assets_path,
-            "ingest": ingest_path,
-            "playlists": playlists_path
-        }
         self.s = ScreenServer(paths=paths)
 
     def tearDown(self):
         # Manually call this so it doesn't complain about not having the playlists_path when it deletes itself going out of scope.
         del(self.s)
 
-        # Clear up the playlists path
-        if os.path.isdir(incoming_path):
-            shutil.rmtree(incoming_path)
-
-        if os.path.isdir(assets_path):
-            shutil.rmtree(assets_path)
-
-        if os.path.isdir(ingest_path):
-            shutil.rmtree(ingest_path)
-
-        if os.path.isdir(playlists_path):
-            shutil.rmtree(playlists_path)
+        for v in paths.itervalues():
+            shutil.rmtree(v)
 
     def test_status(self):
         # Check status starts at EJECT
