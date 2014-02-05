@@ -16,19 +16,19 @@ from screener.schedule import Schedule
 
 
 class ScreenServer(object):
-    def __init__(self, playlists_path=None):
+    def __init__(self, paths):
         # Used for sending messages back to the client asynchronously from anywhere in the app.
         self.bus = Bus()
 
-        self.content = Content()
-        self.playlists = Playlists(playlists_path = playlists_path)
+        self.content = Content(incoming_path=paths["incoming"], assets_path=paths["assets"], ingest_path=paths["ingest"])
+        self.playlists = Playlists(playlists_path=paths["playlists"])
         self.playback = Playback(self.content, self.playlists)
         self.schedule = Schedule(self.content, self.playlists, self.playback)
 
         # @todo: Work out what to do with numbering. Provisional idea is content spans 1-20, playlists 21-40 etc.
         # @todo: Make these hex instead of decimal!!!
         self.handlers = {
-                0x29 : self.content.get_cpl_uuids,
+                0x04 : self.content.get_cpl_uuids,
                 0x30 : self.content.get_cpls,
                 0x31 : self.content.get_cpl,
                 0x06 : self.content.ingest,
@@ -80,6 +80,7 @@ class ScreenServer(object):
             handler_key - The key of the response message.
             result - A dictionary of the data being passed back in the response.
         """
+        print "key: ", handler_key
         handler = self.handlers[handler_key]
         result = handler(**kwargs) or {}
 
@@ -126,7 +127,14 @@ class ScreenerFactory(protocol.Factory):
 
         logging.info('Instantiating ScreenServer()')
         # We want a singleton instance of the screen server so we persist storage of assets between calls.
-        self.ss = ScreenServer(playlists_path=cfg.playlists_path())
+
+        paths = {
+            "incoming": cfg.incoming_path(),
+            "assets": cfg.assets_path(),
+            "ingest": cfg.ingest_path(),
+            "playlists": cfg.playlists_path()
+        }
+        self.ss = ScreenServer(paths=paths)
 
     def stopFactory(self):
         # Force disconnect any remaining clients, apologies.

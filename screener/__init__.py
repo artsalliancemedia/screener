@@ -12,5 +12,6 @@ rsp_codes = {
 	7: {'status': 7, 'err_msg': 'Playlist event not found'},
 	8: {'status': 8, 'err_msg': 'Invalid playlist supplied'},
 	9: {'status': 9, 'err_msg': 'Schedule mode not recognised'},
-	10: {'status': 10, 'err_msg': 'Schedule not found'}
+	10: {'status': 10, 'err_msg': 'Schedule not found'},
+	11: {'status': 11, 'err_msg': 'Ingest not found'}
 }

@@ -24,3 +24,7 @@ screener/screener.cfg
 /screener/ASSET
 /screener/INGEST
 /screener/XSDs
+/screener/PLAYLISTS
+INCOMING
+INGEST
+ASSETS
