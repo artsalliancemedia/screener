@@ -1,6 +1,8 @@
 import unittest, os, shutil
 from test import uuid_re
 from screener.app import ScreenServer
+from screener.lib import config as config_handler
+from screener import cfg
 
 # Minimal info required for a playlist to be successful.
 success_playlist = """
@@ -28,19 +30,23 @@ success_playlist = """
 }
 """
 
-playlists_path = os.path.join(os.path.dirname(__file__), 'PLAYLISTS')
+paths = {
+    'incoming': os.path.join(os.path.dirname(__file__), 'INCOMING'),
+    'assets': os.path.join(os.path.dirname(__file__), 'ASSET'),
+    'ingest': os.path.join(os.path.dirname(__file__), 'INGEST'),
+    'playlists': os.path.join(os.path.dirname(__file__), 'PLAYLISTS')
+}
 
 class TestPlaylistsDefaultState(unittest.TestCase):
     def setUp(self):
-        self.s = ScreenServer(playlists_path=playlists_path)
+        self.s = ScreenServer(paths=paths)
 
     def tearDown(self):
         # Manually call this so it doesn't complain about not having the playlists_path when it deletes itself going out of scope.
         del(self.s)
 
-        # Clear up the playlists path
-        if os.path.isdir(playlists_path):
-            shutil.rmtree(playlists_path)
+        for v in paths.itervalues():
+            shutil.rmtree(v)
 
     def test_defaults(self):
         # Try to get the list of playlist_uuids
@@ -97,7 +103,7 @@ class TestPlaylistsDefaultState(unittest.TestCase):
 
 class TestPlaylistsExists(unittest.TestCase):
     def setUp(self):
-        self.s = ScreenServer(playlists_path=playlists_path)
+        self.s = ScreenServer(paths=paths)
 
         # Insert a playlist that we can manipulate.
         k,v = self.s.process_msg(0x16, playlist_contents=success_playlist)
@@ -107,9 +113,8 @@ class TestPlaylistsExists(unittest.TestCase):
         # Manually call this so it doesn't complain about not having the playlists_path when it deletes itself going out of scope.
         del(self.s)
 
-        # Clear up the playlists path
-        if os.path.isdir(playlists_path):
-            shutil.rmtree(playlists_path)
+        for v in paths.itervalues():
+            shutil.rmtree(v)
 
     def test_update_success(self):
         # Try to update a playlist that should be successful
