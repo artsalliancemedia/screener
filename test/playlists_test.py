@@ -1,8 +1,10 @@
-import unittest, os, shutil
-from test import uuid_re
+import unittest, os, shutil, re
 from screener.app import ScreenServer
 from screener.lib import config as config_handler
 from screener import cfg
+
+# Use for validating any uuid returned :)
+uuid_re = re.compile("^[a-fA-F\d]{8}-[a-fA-F\d]{4}-[a-fA-F\d]{4}-[a-fA-F\d]{4}-[a-fA-F\d]{12}$")
 
 # Minimal info required for a playlist to be successful.
 success_playlist = """
